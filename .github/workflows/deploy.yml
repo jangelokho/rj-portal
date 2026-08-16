@@ -1,0 +1,41 @@
+name: Deploy to Vercel
+
+# Deploys via the Vercel CLI using a token rather than Vercel's Git integration.
+# The Hobby plan only accepts deployments authored by the account owner, so pushes
+# from other collaborators are rejected. Running the CLI with the owner's token
+# means every push deploys, whoever made it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  VERCEL_ORG_ID: team_YFhwDDc992p0iR5lL9mFEs3g
+  VERCEL_PROJECT_ID: prj_vqdpSecYg7gfGnk3vmwXSk1WABwi
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull project settings and environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
