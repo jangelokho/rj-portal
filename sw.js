@@ -1,8 +1,8 @@
-// Service worker: stale-while-revalidate for the app shell and fonts —
+// Service worker: stale-while-revalidate for the app shell —
 // respond from cache instantly, refresh the cache in the background.
 // /api/* is never cached (the app keeps its own localStorage snapshot for instant data).
 // Bump CACHE to invalidate after big changes.
-const CACHE = "rj-portal-v2";
+const CACHE = "rj-portal-v3";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -20,9 +20,8 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   const sameOrigin = url.origin === self.location.origin;
-  const isFont = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (sameOrigin && url.pathname.startsWith("/api/")) return; // always live
-  if (!sameOrigin && !isFont) return;
+  if (!sameOrigin) return; // shell is same-origin only; no webfonts to cache
 
   e.respondWith(
     caches.match(e.request).then((cached) => {

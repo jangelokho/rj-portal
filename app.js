@@ -6,6 +6,10 @@ const PW_KEY = "rj_portal_pw";
 const VIEW_KEY = "rj_view";   // 'board' | 'list'
 const SORT_KEY = "rj_sort";   // 'newest' | 'oldest'
 const SNAP_KEY = "rj_snapshot"; // last view {lists, listId, items} for instant paint
+const THEME_KEY = "rj_theme";   // 'light' | 'dark'; absent = follow the OS
+
+// Fallback accent for lists with no colour set in the DB.
+const DEFAULT_LIST_COLOR = "#0d9488";
 
 // Map Telegram user ids -> display names for attribution (ids from the bot's allowlist).
 const USER_NAMES = {
@@ -96,6 +100,43 @@ $("#login-form").addEventListener("submit", async (e) => {
 });
 $("#logout-btn").addEventListener("click", () => { localStorage.removeItem(PW_KEY); sessionStorage.removeItem(PW_KEY); showLogin(); });
 
+// ---------- Theme ----------
+// index.html has already resolved and applied a theme before first paint; this only
+// keeps the button in sync and handles switching.
+const THEME_META = { dark: "#0e1014", light: "#f4f6f8" };
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+function applyTheme(theme, persist) {
+  document.documentElement.setAttribute("data-theme", theme);
+  // Tints the iOS status bar and Android task-switcher chrome in the installed PWA.
+  const meta = document.getElementById("theme-color-meta");
+  if (meta) meta.setAttribute("content", THEME_META[theme]);
+  // The button advertises what you'd switch TO, which is what people expect of a toggle.
+  const next = theme === "dark" ? "light" : "dark";
+  $("#theme-icon").textContent = next === "dark" ? "\u{1F319}" : "\u2600\uFE0F";
+  $("#theme-label").textContent = next === "dark" ? "Dark" : "Light";
+  $("#theme-btn").title = `Switch to ${next} mode`;
+  if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ } }
+}
+
+$("#theme-btn").addEventListener("click", () => {
+  applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
+});
+
+// Follow the OS only while the user hasn't picked a side themselves.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch (err) { /* private mode */ }
+    if (saved !== "light" && saved !== "dark") applyTheme(e.matches ? "light" : "dark", false);
+  });
+}
+
+applyTheme(currentTheme(), false); // sync the button with what the bootstrap chose
+
 // ---------- Init / data ----------
 async function init() {
   // reflect persisted view + sort in the controls
@@ -132,7 +173,7 @@ function applyListHeader() {
   $("#current-list-kind").textContent = list ? list.kind : "";
   $("#delete-list-btn").classList.toggle("hidden", !list || list.is_standard);
   $("#rename-list-btn").classList.toggle("hidden", !list || list.is_standard);
-  document.documentElement.style.setProperty("--list-accent", list ? (list.color || "#6366f1") : "#6366f1");
+  document.documentElement.style.setProperty("--list-accent", list ? (list.color || DEFAULT_LIST_COLOR) : DEFAULT_LIST_COLOR);
 }
 
 async function selectList(id) {
@@ -156,7 +197,7 @@ async function selectList(id) {
 
 function currentList() { return state.lists.find((l) => l.id === state.currentListId); }
 function listNameOf(id) { return state.lists.find((l) => l.id === id)?.name || ""; }
-function listColorOf(id) { return state.lists.find((l) => l.id === id)?.color || "#6366f1"; }
+function listColorOf(id) { return state.lists.find((l) => l.id === id)?.color || DEFAULT_LIST_COLOR; }
 
 function saveSnapshot() {
   try {

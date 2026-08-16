@@ -5,16 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>RJ Portal — the Manager</title>
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#0e1014" />
+  <meta id="theme-color-meta" name="theme-color" content="#0e1014" />
   <link rel="icon" type="image/png" href="/icon-192.png" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="RJ Portal" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Theme is applied before first paint so a light-mode user never sees a dark flash.
+       Kept inline and dependency-free on purpose — app.js loads too late for this. -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem("rj_theme"); } catch (e) { /* private mode */ }
+      // An explicit choice wins; otherwise follow the OS. Resolving it here means the
+      // stylesheet defines each palette exactly once, keyed off data-theme.
+      var theme = (saved === "light" || saved === "dark")
+        ? saved
+        : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -35,6 +46,9 @@
       <div class="brand">RJ&nbsp;Portal</div>
       <nav id="list-nav" class="list-nav"></nav>
       <button id="new-list-btn" class="new-list-btn">+ New list</button>
+      <button id="theme-btn" class="theme-btn" title="Switch theme" aria-label="Switch theme">
+        <span id="theme-icon">🌙</span><span id="theme-label">Dark</span>
+      </button>
       <button id="logout-btn" class="logout-btn">Log out</button>
     </aside>
 
