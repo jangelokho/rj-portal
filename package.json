@@ -1,0 +1,8 @@
+{
+  "name": "rj-portal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RJ Portal — the Manager for the Darth Mitbot household Kanban (Ria + Jangelo).",
+  "engines": { "node": ">=18" }
+}

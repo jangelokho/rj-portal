@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>RJ Portal — the Manager</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0e1014" />
+  <link rel="icon" type="image/png" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="RJ Portal" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- Password gate -->
+  <div id="login" class="login hidden">
+    <form id="login-form" class="login-card">
+      <h1>RJ Portal</h1>
+      <p class="muted">The Manager for Darth Mitbot</p>
+      <input id="login-pw" type="password" placeholder="Password" autocomplete="current-password" />
+      <button type="submit">Enter</button>
+      <p id="login-error" class="error hidden"></p>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">RJ&nbsp;Portal</div>
+      <nav id="list-nav" class="list-nav"></nav>
+      <button id="new-list-btn" class="new-list-btn">+ New list</button>
+      <button id="logout-btn" class="logout-btn">Log out</button>
+    </aside>
+
+    <main class="main">
+      <header class="main-head">
+        <div class="main-title">
+          <span id="current-list-name">—</span>
+          <button id="rename-list-btn" class="rename-list-btn hidden" title="Rename list" aria-label="Rename list">✏️</button>
+          <span id="current-list-kind" class="kind-badge"></span>
+        </div>
+        <div class="toolbar">
+          <button id="add-item-btn" class="add-item-btn">+ Add item</button>
+          <div id="view-toggle" class="view-toggle">
+            <button data-view="board" class="active">Board</button>
+            <button data-view="list">List</button>
+          </div>
+          <div id="status-filter" class="status-filter">
+            <button data-status="active" class="active">Active</button>
+            <button data-status="done">Done</button>
+            <button data-status="archived">Archived</button>
+            <button data-status="all">All</button>
+          </div>
+          <select id="sort-select" title="Sort by create date">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          <button id="starred-toggle" class="starred-toggle" title="Show starred only">☆ Starred</button>
+          <div class="toolbar-right">
+            <label class="all-lists"><input id="all-lists-toggle" type="checkbox" /> All lists</label>
+            <input id="search" type="search" placeholder="Search…" />
+            <button id="delete-list-btn" class="delete-list-btn hidden">Delete list</button>
+          </div>
+        </div>
+      </header>
+      <section id="board" class="board hidden"></section>
+      <section id="cards" class="cards"></section>
+      <div id="empty" class="empty hidden"></div>
+    </main>
+  </div>
+
+  <!-- Detail modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <button id="modal-close" class="modal-close" aria-label="Close">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Add-item form modal -->
+  <div id="form-modal" class="modal hidden">
+    <div class="modal-backdrop" data-close-form></div>
+    <div class="modal-card">
+      <button class="modal-close" data-close-form aria-label="Close">×</button>
+      <div class="modal-content">
+        <h2 id="form-title">Add item</h2>
+        <form id="add-form" class="add-form">
+          <label>Title
+            <input id="f-title" type="text" placeholder="What is it?" />
+          </label>
+          <label>Link (URL)
+            <input id="f-url" type="url" placeholder="https://… (preview loads automatically)" />
+          </label>
+          <label>Note
+            <textarea id="f-desc" rows="3" placeholder="Optional notes"></textarea>
+          </label>
+          <label>Image
+            <input id="f-image-file" type="file" accept="image/*" />
+          </label>
+          <img id="f-image-preview" class="form-img-preview hidden" alt="" />
+          <p id="f-status-msg" class="muted"></p>
+          <div class="form-actions">
+            <button type="submit" id="f-save">Save</button>
+            <button type="button" class="btn-ghost" data-close-form>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toasts" class="toasts"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
