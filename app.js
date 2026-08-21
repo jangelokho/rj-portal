@@ -165,7 +165,6 @@ async function loadLists() { state.lists = await api("/api/lists"); renderSideba
 function applyListHeader() {
   const list = currentList();
   $("#current-list-name").textContent = list ? list.name : "—";
-  $("#current-list-kind").textContent = list ? list.kind : "";
   $("#delete-list-btn").classList.toggle("hidden", !list || list.is_standard);
   $("#rename-list-btn").classList.toggle("hidden", !list || list.is_standard);
   document.documentElement.style.setProperty("--list-accent", list ? (list.color || DEFAULT_LIST_COLOR) : DEFAULT_LIST_COLOR);
@@ -450,19 +449,16 @@ function renderCard(item, opts = {}) {
         <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">Fav</button>
       </div>
       <div class="card-actions">
-        <label class="card-check"><input type="checkbox" ${item.status === "done" ? "checked" : ""}> Done</label>
+        <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
         <button class="card-archive">${item.status === "archived" ? "Unarchive" : "Archive"}</button>
       </div>
     </div>`;
   card.addEventListener("click", () => openModal(item));
-  // Stop the whole label, not just the input — tapping the "Done" text otherwise
-  // toggles AND bubbles to the card click, opening the modal on top.
-  card.querySelector(".card-check").addEventListener("click", (e) => e.stopPropagation());
-  const check = card.querySelector(".card-check input");
-  check.addEventListener("click", (e) => e.stopPropagation());
-  check.addEventListener("change", async (e) => {
+  const check = card.querySelector(".card-check");
+  check.addEventListener("click", async (e) => {
     e.stopPropagation();
-    await applyPatch(item, { status: e.target.checked ? "done" : "active" }, e.target.checked ? "Marked done" : "Marked active");
+    const toDone = item.status !== "done";
+    await applyPatch(item, { status: toDone ? "done" : "active" }, toDone ? "Marked done" : "Marked active");
   });
   const arch = card.querySelector(".card-archive");
   arch.addEventListener("click", async (e) => {
