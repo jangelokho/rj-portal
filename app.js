@@ -320,7 +320,6 @@ $("#starred-toggle").addEventListener("click", () => {
   state.starredOnly = !state.starredOnly;
   const btn = $("#starred-toggle");
   btn.classList.toggle("active", state.starredOnly);
-  btn.textContent = (state.starredOnly ? "★" : "☆") + " Starred";
   renderMain();
 });
 
@@ -370,7 +369,7 @@ function renderList() {
   items = sortItems(items);
   const list = currentList();
   $("#empty").innerHTML = state.starredOnly
-    ? emptyHTML("No starred items here.", "Tap a card's ☆ to pin it to the top.")
+    ? emptyHTML("No starred items here.", "Tap a card's Fav button to pin it to the top.")
     : emptyHTML(`Nothing in ${list ? list.name : "this list"} yet.`,
         'Add one with "+ Add item" — or send it to Darth Mitbot.');
   $("#empty").classList.toggle("hidden", items.length > 0);
@@ -448,7 +447,7 @@ function renderCard(item, opts = {}) {
         <span class="pill">${esc(item.type || "item")}</span>
         ${listBadge}
         <span class="spacer"></span>
-        <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
+        <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">Fav</button>
       </div>
       <div class="card-actions">
         <label class="card-check"><input type="checkbox" ${item.status === "done" ? "checked" : ""}> Done</label>
@@ -583,7 +582,7 @@ function openModal(item) {
       fields += field("Map", link(e.map_url, "Open in Maps"));
       fields += field(kind === "restaurant" ? "Cuisine" : "Type", arr(e.cuisine || e.types));
       fields += field("Price", priceLevel(e.price_level));
-      fields += field("Rating", e.rating ? `★ ${e.rating}` : "");
+      fields += field("Rating", e.rating ? String(e.rating) : "");
       fields += field("Hours", e.hours ? esc(e.hours) + (openNow ? " " + openNow : "") : openNow);
       fields += field("Phone", e.phone);
       if (e.why) fields += field("Why", esc(e.why));
@@ -594,7 +593,7 @@ function openModal(item) {
       fields += field("Type", e.media_type);
       fields += field("Runtime", e.runtime ? `${e.runtime} min` : (e.seasons ? `${e.seasons} seasons` : ""));
       fields += field("Genres", arr(e.genres));
-      fields += field("Rating", e.vote_average ? `★ ${e.vote_average}` : "");
+      fields += field("Rating", e.vote_average ? String(e.vote_average) : "");
       if (e.overview) fields += field("Synopsis", esc(e.overview));
       if (e.watch_providers) fields += field("Streaming", badges(e.watch_providers));
       break;
@@ -617,7 +616,7 @@ function openModal(item) {
       <div class="modal-fields">${fields}</div>
       <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="Add a note…">${esc(item.description || "")}</textarea>
       <div class="modal-edit-row">
-        <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star">${isFav(item) ? "★ Starred" : "☆ Star"}</button>
+        <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star">${isFav(item) ? "Starred" : "Star"}</button>
         <button id="modal-save-edit" disabled>Save</button>
         <span id="modal-edit-msg" class="muted"></span>
       </div>
