@@ -23,10 +23,6 @@ const COLUMNS = [
   { status: "archived", label: "Archived" },
 ];
 
-// Standard-list icons (by name); custom lists fall back to a kind icon.
-const LIST_ICONS = { "Buyables": "🛍️", "Grocery": "🛒", "To Dos": "✅", "Date Activities": "💕", "Restaurants": "🍽️", "Movies": "🎬" };
-const KIND_ICONS = { buyable: "🛍️", todo: "✅", place: "📍", restaurant: "🍽️", watch: "🎬", generic: "📋" };
-function listIcon(l) { return LIST_ICONS[l.name] || KIND_ICONS[l.kind] || "📋"; }
 function isFav(it) { return !!(it.enriched && it.enriched.favorite); }
 
 const state = {
@@ -116,7 +112,6 @@ function applyTheme(theme, persist) {
   if (meta) meta.setAttribute("content", THEME_META[theme]);
   // The button advertises what you'd switch TO, which is what people expect of a toggle.
   const next = theme === "dark" ? "light" : "dark";
-  $("#theme-icon").textContent = next === "dark" ? "\u{1F319}" : "\u2600\uFE0F";
   $("#theme-label").textContent = next === "dark" ? "Dark" : "Light";
   $("#theme-btn").title = `Switch to ${next} mode`;
   if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* private mode */ } }
@@ -169,7 +164,7 @@ async function loadLists() { state.lists = await api("/api/lists"); renderSideba
 
 function applyListHeader() {
   const list = currentList();
-  $("#current-list-name").textContent = list ? `${listIcon(list)} ${list.name}` : "—";
+  $("#current-list-name").textContent = list ? list.name : "—";
   $("#current-list-kind").textContent = list ? list.kind : "";
   $("#delete-list-btn").classList.toggle("hidden", !list || list.is_standard);
   $("#rename-list-btn").classList.toggle("hidden", !list || list.is_standard);
@@ -248,7 +243,6 @@ function renderSidebar() {
     btn.className = "list-item" + (l.id === state.currentListId ? " selected" : "");
     btn.style.setProperty("--list-accent", l.color || "#64748b");
     btn.innerHTML = `
-      <span class="list-icon">${listIcon(l)}</span>
       <span class="list-name">${esc(l.name)}</span>
       <span class="list-count">${l.count ?? 0}</span>`;
     btn.addEventListener("click", () => selectList(l.id));
@@ -376,8 +370,8 @@ function renderList() {
   items = sortItems(items);
   const list = currentList();
   $("#empty").innerHTML = state.starredOnly
-    ? emptyHTML("★", "No starred items here.", "Tap a card's ☆ to pin it to the top.")
-    : emptyHTML(list ? listIcon(list) : "📋", `Nothing in ${list ? list.name : "this list"} yet.`,
+    ? emptyHTML("No starred items here.", "Tap a card's ☆ to pin it to the top.")
+    : emptyHTML(`Nothing in ${list ? list.name : "this list"} yet.`,
         'Add one with "+ Add item" — or send it to Darth Mitbot.');
   $("#empty").classList.toggle("hidden", items.length > 0);
   const wrap = $("#cards"); wrap.innerHTML = "";
@@ -423,7 +417,7 @@ function renderGlobalResults() {
   let items = (state.allItems || []).filter((it) => matches(it, q));
   if (state.starredOnly) items = items.filter(isFav);
   items = sortItems(items);
-  $("#empty").innerHTML = emptyHTML("🔍", "No matches.", "Try a different search.");
+  $("#empty").innerHTML = emptyHTML("No matches.", "Try a different search.");
   $("#empty").classList.toggle("hidden", items.length > 0);
   const wrap = $("#cards"); wrap.innerHTML = "";
   items.forEach((it) => wrap.appendChild(renderCard(it, { showListName: true })));
@@ -814,8 +808,8 @@ function $(s) { return document.querySelector(s); }
 function $$(s) { return Array.from(document.querySelectorAll(s)); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function arr(v) { return Array.isArray(v) ? esc(v.join(", ")) : esc(v); }
-function emptyHTML(icon, msg, hint) {
-  return `<div class="empty-icon">${icon}</div><div class="empty-msg">${esc(msg)}</div>` +
+function emptyHTML(msg, hint) {
+  return `<div class="empty-msg">${esc(msg)}</div>` +
     (hint ? `<div class="empty-hint">${esc(hint)}</div>` : "");
 }
 function priceLevel(n) { return n ? "$".repeat(Math.max(1, Math.min(4, Number(n)))) : ""; }

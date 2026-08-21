@@ -264,9 +264,6 @@ input:focus, select:focus { border-color: var(--accent); }
 .card-star.faved { color: #f59e0b; }
 .card-meta .spacer { flex: 1; }
 
-/* ---------- Sidebar icon ---------- */
-.list-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
-
 /* ---------- Modal editable fields ---------- */
 .modal-edit-title { width: 100%; font-family: var(--font-display); font-size: 22px; font-weight: 600; background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text); padding: 2px 0; }
 .modal-edit-title:hover { border-bottom-color: var(--border); }
@@ -313,7 +310,6 @@ body {
   content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
   border-radius: 0 3px 3px 0; background: var(--list-accent);
 }
-.list-icon { font-size: 18px; }
 .list-name { font-weight: 700; }
 .list-count { background: var(--chip-bg); }
 .list-item.selected .list-count { background: var(--list-accent); color: #fff; }
@@ -354,7 +350,6 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; margin-top: 64px; text-align: center;
 }
-.empty-icon { font-size: 56px; opacity: .92; }
 .empty-msg { font-family: var(--font-display); font-size: 18px; color: var(--text); }
 .empty-hint { font-size: 13px; color: var(--muted); max-width: 320px; }
 
@@ -510,10 +505,7 @@ body {
   font-size: 13px;
 }
 .theme-btn:hover { background: var(--bg-card); color: var(--text); }
-#theme-icon { font-size: 14px; line-height: 1; }
 
 @media (max-width: 768px) {
-  /* In the mobile chip bar the label would eat scroll width — icon only. */
   .theme-btn { flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; }
-  #theme-label { display: none; }
 }
