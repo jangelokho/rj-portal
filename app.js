@@ -3,7 +3,6 @@
 // and sent as x-portal-password on every call.
 
 const PW_KEY = "rj_portal_pw";
-const VIEW_KEY = "rj_view";   // 'board' | 'list'
 const SORT_KEY = "rj_sort";   // 'newest' | 'oldest'
 const SNAP_KEY = "rj_snapshot"; // last view {lists, listId, items} for instant paint
 const THEME_KEY = "rj_theme";   // 'light' | 'dark'; absent = follow the OS
@@ -17,13 +16,21 @@ const USER_NAMES = {
   200711792: "Ria",
 };
 
-const COLUMNS = [
-  { status: "active", label: "Active" },
-  { status: "done", label: "Done" },
-  { status: "archived", label: "Archived" },
-];
-
 function isFav(it) { return !!(it.enriched && it.enriched.favorite); }
+
+// Active items show their own due_date (the plain "set a date" field); done/archived
+// items show when that happened instead — status_changed_at, stamped by a DB trigger only
+// on an actual status change, so editing a note later never overwrites it.
+function dateChip(item) {
+  if (item.status === "active") {
+    if (!item.due_date) return "";
+    const overdue = item.due_date < todayIso();
+    return `<span class="date-chip${overdue ? " overdue" : ""}">${fmtDueDate(item.due_date)}</span>`;
+  }
+  if (!item.status_changed_at) return "";
+  const label = item.status === "done" ? "Done" : "Archived";
+  return `<span class="date-chip">${label} ${fmtDateShort(item.status_changed_at)}</span>`;
+}
 
 const state = {
   lists: [],
@@ -35,7 +42,6 @@ const state = {
   search: "",
   allLists: false,
   starredOnly: false,
-  view: localStorage.getItem(VIEW_KEY) || "board",
   sortOrder: localStorage.getItem(SORT_KEY) || "newest",
   formImageUrl: null,        // image chosen in the add form
   lastFetchedUrl: "",        // dedupe auto-preview fetches
@@ -134,8 +140,7 @@ applyTheme(currentTheme(), false); // sync the button with what the bootstrap ch
 
 // ---------- Init / data ----------
 async function init() {
-  // reflect persisted view + sort in the controls
-  $$("#view-toggle button").forEach((b) => b.classList.toggle("active", b.dataset.view === state.view));
+  // reflect persisted sort in the controls
   $("#sort-select").value = state.sortOrder;
 
   // Instant paint from the last session's snapshot, then refresh from the network.
@@ -287,14 +292,6 @@ $("#delete-list-btn").addEventListener("click", async () => {
 });
 
 // ---------- Toolbar controls ----------
-$$("#view-toggle button").forEach((b) =>
-  b.addEventListener("click", () => {
-    state.view = b.dataset.view;
-    localStorage.setItem(VIEW_KEY, state.view);
-    $$("#view-toggle button").forEach((x) => x.classList.toggle("active", x === b));
-    renderMain();
-  })
-);
 $("#sort-select").addEventListener("change", (e) => {
   state.sortOrder = e.target.value; localStorage.setItem(SORT_KEY, state.sortOrder); renderMain();
 });
@@ -327,27 +324,17 @@ function globalMode() { return state.allLists && state.search.trim().length > 0;
 
 function renderMain() {
   const g = globalMode();
-  $("#status-filter").style.display = (state.view === "list" && !g) ? "" : "none";
-  if (g) { $("#board").classList.add("hidden"); $("#cards").classList.remove("hidden"); renderGlobalResults(); return; }
-  if (state.view === "board") { $("#cards").classList.add("hidden"); $("#board").classList.remove("hidden"); renderBoard(); }
-  else { $("#board").classList.add("hidden"); $("#cards").classList.remove("hidden"); renderList(); }
+  $("#status-filter").style.display = g ? "none" : "";
+  if (g) { renderGlobalResults(); return; }
+  renderList();
 }
 
 // Re-render without losing the user's place — used for mutations (tick, star, move…)
 // so checking items one by one deep in a long list doesn't bounce back to the top.
 function renderMainPreservingScroll() {
   const cardsTop = $("#cards").scrollTop;
-  const colTops = {};
-  $$(".board-col").forEach((c) => {
-    const b = c.querySelector(".board-col-body");
-    if (b) colTops[c.dataset.status] = b.scrollTop;
-  });
   renderMain();
   $("#cards").scrollTop = cardsTop;
-  $$(".board-col").forEach((c) => {
-    const b = c.querySelector(".board-col-body");
-    if (b && colTops[c.dataset.status] != null) b.scrollTop = colTops[c.dataset.status];
-  });
 }
 
 function sortItems(arr) {
@@ -376,40 +363,6 @@ function renderList() {
   items.forEach((it) => wrap.appendChild(renderCard(it, {})));
 }
 
-function renderBoard() {
-  const q = state.search.trim().toLowerCase();
-  $("#empty").classList.add("hidden");
-  const board = $("#board"); board.innerHTML = "";
-  for (const col of COLUMNS) {
-    let items = state.items.filter((it) => it.status === col.status);
-    if (q) items = items.filter((it) => matches(it, q));
-    if (state.starredOnly) items = items.filter(isFav);
-    items = sortItems(items);
-
-    const colEl = document.createElement("div");
-    colEl.className = "board-col"; colEl.dataset.status = col.status;
-    colEl.innerHTML = `<div class="board-col-head">${col.label}<span class="col-count">${items.length}</span></div>`;
-    const body = document.createElement("div"); body.className = "board-col-body";
-    if (!items.length) {
-      const e = document.createElement("div"); e.className = "col-empty";
-      e.textContent = matchMedia("(hover: none)").matches ? "No items" : "Drop here";
-      body.appendChild(e);
-    }
-    items.forEach((it) => body.appendChild(renderCard(it, { draggable: true })));
-    colEl.appendChild(body);
-
-    colEl.addEventListener("dragover", (e) => { e.preventDefault(); colEl.classList.add("drag-over"); });
-    colEl.addEventListener("dragleave", (e) => { if (!colEl.contains(e.relatedTarget)) colEl.classList.remove("drag-over"); });
-    colEl.addEventListener("drop", async (e) => {
-      e.preventDefault(); colEl.classList.remove("drag-over");
-      const id = Number(e.dataTransfer.getData("text/plain"));
-      const item = state.items.find((x) => x.id === id);
-      if (item && item.status !== col.status) await applyPatch(item, { status: col.status }, `Moved to ${col.label}`);
-    });
-    board.appendChild(colEl);
-  }
-}
-
 function renderGlobalResults() {
   const q = state.search.trim().toLowerCase();
   let items = (state.allItems || []).filter((it) => matches(it, q));
@@ -426,14 +379,6 @@ function renderCard(item, opts = {}) {
   const card = document.createElement("div");
   card.className = `card ${item.status}`;
   card.style.setProperty("--card-accent", listColorOf(item.list_id));
-  if (opts.draggable) {
-    card.draggable = true;
-    card.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", String(item.id));
-      e.dataTransfer.effectAllowed = "move"; card.classList.add("dragging");
-    });
-    card.addEventListener("dragend", () => card.classList.remove("dragging"));
-  }
   const img = item.image
     ? `<img class="card-img" src="${esc(item.image)}" alt="" loading="lazy" onerror="this.remove()">` : "";
   const listBadge = opts.showListName ? `<span class="list-badge">${esc(listNameOf(item.list_id))}</span>` : "";
@@ -445,6 +390,7 @@ function renderCard(item, opts = {}) {
       <div class="card-meta">
         <span class="pill">${esc(item.type || "item")}</span>
         ${listBadge}
+        ${dateChip(item)}
         <span class="spacer"></span>
         <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">Fav</button>
       </div>
@@ -611,6 +557,10 @@ function openModal(item) {
       ${item.url ? `<p>${link(item.url, "Open original")}</p>` : ""}
       <div class="modal-fields">${fields}</div>
       <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="Add a note…">${esc(item.description || "")}</textarea>
+      <div class="modal-edit-date-row">
+        <label for="modal-edit-date">Date</label>
+        <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
+      </div>
       <div class="modal-edit-row">
         <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star">${isFav(item) ? "Starred" : "Star"}</button>
         <button id="modal-save-edit" disabled>Save</button>
@@ -624,7 +574,10 @@ function openModal(item) {
         <span id="modal-upload-msg" class="muted"></span>
       </div>
     </div>
-    <p class="attribution">${attributionLine(item)} · ${fmtDate(item.created_at)}</p>
+    <p class="attribution">${attributionLine(item)} · ${fmtDate(item.created_at)}${
+      item.status !== "active" && item.status_changed_at
+        ? ` · ${item.status === "done" ? "Done" : "Archived"} ${fmtDate(item.status_changed_at)}`
+        : ""}</p>
     <div class="modal-actions">
       <button class="btn-ghost" id="act-done">${isDone ? "Mark active" : "Mark done"}</button>
       <button class="btn-ghost" id="act-archive">${isArchived ? "Unarchive" : "Archive"}</button>
@@ -665,17 +618,18 @@ function openModal(item) {
     } catch (err) { $("#modal-upload-msg").textContent = err.message; }
   });
 
-  // Editable title + note
-  const titleEl = $("#modal-edit-title"), noteEl = $("#modal-edit-note"), saveBtn = $("#modal-save-edit");
-  const origT = titleEl.value, origN = noteEl.value;
-  const onEdit = () => { saveBtn.disabled = titleEl.value === origT && noteEl.value === origN; };
+  // Editable title + note + date
+  const titleEl = $("#modal-edit-title"), noteEl = $("#modal-edit-note"), dateEl = $("#modal-edit-date"), saveBtn = $("#modal-save-edit");
+  const origT = titleEl.value, origN = noteEl.value, origD = dateEl.value;
+  const onEdit = () => { saveBtn.disabled = titleEl.value === origT && noteEl.value === origN && dateEl.value === origD; };
   titleEl.addEventListener("input", onEdit);
   noteEl.addEventListener("input", onEdit);
+  dateEl.addEventListener("input", onEdit);
   saveBtn.onclick = () => {
     saveBtn.disabled = true;
-    const patch = { title: titleEl.value.trim() || null, description: noteEl.value.trim() || null };
-    const prev = { title: item.title, description: item.description };
-    item.title = patch.title; item.description = patch.description;
+    const patch = { title: titleEl.value.trim() || null, description: noteEl.value.trim() || null, due_date: dateEl.value || null };
+    const prev = { title: item.title, description: item.description, due_date: item.due_date };
+    item.title = patch.title; item.description = patch.description; item.due_date = patch.due_date;
     renderMainPreservingScroll(); saveSnapshot(); showToast("Saved"); openModal(item);
     syncPatch(item.id, patch, () => { Object.assign(item, prev); renderMainPreservingScroll(); openModal(item); });
   };
@@ -701,7 +655,7 @@ function openAddForm() {
   state.formImageUrl = null;
   state.lastFetchedUrl = "";
   $("#form-title").textContent = `Add to ${list.name}`;
-  $("#f-title").value = ""; $("#f-url").value = ""; $("#f-desc").value = "";
+  $("#f-title").value = ""; $("#f-url").value = ""; $("#f-desc").value = ""; $("#f-date").value = "";
   $("#f-image-file").value = "";
   $("#f-image-preview").classList.add("hidden"); $("#f-image-preview").src = "";
   $("#f-status-msg").textContent = "";
@@ -756,6 +710,7 @@ $("#add-form").addEventListener("submit", async (e) => {
     description: description || null,
     image: state.formImageUrl || null,
     raw_text: (!title && !url) ? description || null : null,
+    due_date: $("#f-date").value || null,
   };
   $("#f-save").disabled = true;
   try {
@@ -818,6 +773,22 @@ function fmtDate(s) {
   try { return new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
   catch { return ""; }
 }
+// Short form for card chips — no year, since these are near-term dates in practice.
+function fmtDateShort(s) {
+  if (!s) return "";
+  try { return new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+  catch { return ""; }
+}
+// due_date is a plain YYYY-MM-DD (no time, no zone). Parsing that through `new Date(s)`
+// reads it as UTC midnight, which `toLocaleDateString` can then shift back a day in any
+// negative-UTC-offset timezone — build the display string from the parts directly instead.
+function fmtDueDate(s) {
+  if (!s) return "";
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function todayIso() { return new Date().toLocaleDateString("en-CA"); } // en-CA gives YYYY-MM-DD
 
 // ---------- boot ----------
 if (pw()) showApp(); else showLogin();
