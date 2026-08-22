@@ -4,6 +4,10 @@ name: Deploy to Vercel
 # The Hobby plan only accepts deployments authored by the account owner, so pushes
 # from other collaborators are rejected. Running the CLI with the owner's token
 # means every push deploys, whoever made it.
+#
+# timeout-minutes is load-bearing: if Vercel's build queue stalls, `vercel deploy`
+# blocks forever. Without a cap a single push burns the full 6-hour GitHub default
+# and eats the monthly Actions allowance.
 
 on:
   push:
@@ -13,6 +17,7 @@ on:
 env:
   VERCEL_ORG_ID: team_YFhwDDc992p0iR5lL9mFEs3g
   VERCEL_PROJECT_ID: prj_vqdpSecYg7gfGnk3vmwXSk1WABwi
+  VERCEL_CLI_VERSION: 59.1.3
 
 concurrency:
   group: deploy-production
@@ -21,6 +26,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +35,7 @@ jobs:
           node-version: 22
 
       - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@${{ env.VERCEL_CLI_VERSION }}
 
       - name: Pull project settings and environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
