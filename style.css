@@ -4,9 +4,9 @@
   --bg-card: #1c2029;
   --bg-card-alt: #232834;
   --border: #2a2f3a;
-  /* Manrope (loaded in index.html via Google Fonts, weights 400/500 only — that's all
-     this app uses). Falls back to each platform's system UI font while it loads. */
-  --font-body: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+  /* Hanken Grotesk (loaded in index.html via Google Fonts, weights 400/500/600 — that's
+     all this app uses). Falls back to each platform's system UI font while it loads. */
+  --font-body: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
                Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-display: var(--font-body);
   --text: #e6e8ec;
