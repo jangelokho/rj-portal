@@ -348,6 +348,7 @@ $("#starred-toggle").addEventListener("click", () => {
   state.starredOnly = !state.starredOnly;
   const btn = $("#starred-toggle");
   btn.classList.toggle("active", state.starredOnly);
+  btn.textContent = (state.starredOnly ? "★" : "☆") + " Starred";
   renderMain();
 });
 
@@ -448,7 +449,7 @@ function renderCard(item, opts = {}) {
         ${listBadge}
         ${dateChip(item)}
         <span class="spacer"></span>
-        <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">Fav</button>
+        <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
       </div>
       <div class="card-actions">
         <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
@@ -472,7 +473,7 @@ function renderRow(item, opts = {}) {
     </div>
     <div class="row-meta">${listBadge}${dateChip(item)}</div>
     <div class="row-actions">
-      <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">Fav</button>
+      <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
       <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
       <button class="card-archive">${item.status === "archived" ? "Unarchive" : "Archive"}</button>
     </div>`;
@@ -629,7 +630,7 @@ function openModal(item) {
         <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
       </div>
       <div class="modal-edit-row">
-        <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star">${isFav(item) ? "Starred" : "Star"}</button>
+        <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star">${isFav(item) ? "★ Starred" : "☆ Star"}</button>
         <button id="modal-save-edit" disabled>Save</button>
         <span id="modal-edit-msg" class="muted"></span>
       </div>
