@@ -44,6 +44,18 @@ function dateChip(item) {
   return `<span class="date-chip">${label} ${fmtDateShort(item.status_changed_at)}</span>`;
 }
 
+function itemKind(item) { return (state.lists.find((l) => l.id === item.list_id) || {}).kind; }
+
+// The couple's own rating of a restaurant/place visit — separate from Google's crowd
+// rating shown in the detail modal.
+function ratingChip(item) {
+  const kind = itemKind(item);
+  if (kind !== "restaurant" && kind !== "place") return "";
+  const n = item.enriched && item.enriched.my_rating;
+  if (!n) return "";
+  return `<span class="date-chip">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
+}
+
 const state = {
   lists: [],
   currentListId: null,
@@ -448,6 +460,7 @@ function renderCard(item, opts = {}) {
         <span class="pill">${esc(item.type || "item")}</span>
         ${listBadge}
         ${dateChip(item)}
+        ${ratingChip(item)}
         <span class="spacer"></span>
         <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
       </div>
@@ -471,7 +484,7 @@ function renderRow(item, opts = {}) {
       <div class="row-title">${esc(item.title || item.raw_text || "(untitled)")}</div>
       ${item.enriched?.address ? `<div class="row-address">${esc(item.enriched.address)}</div>` : ""}
     </div>
-    <div class="row-meta">${listBadge}${dateChip(item)}</div>
+    <div class="row-meta">${listBadge}${dateChip(item)}${ratingChip(item)}</div>
     <div class="row-actions">
       <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
       <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
@@ -617,6 +630,16 @@ function openModal(item) {
     .map((l) => `<option value="${l.id}" ${l.id === item.list_id ? "selected" : ""}>${esc(l.name)}</option>`).join("");
   const isDone = item.status === "done";
   const isArchived = item.status === "archived";
+  const isVisitKind = kind === "restaurant" || kind === "place";
+
+  const myRating = (e.my_rating | 0);
+  const ratingRow = isVisitKind ? `
+      <div class="modal-edit-date-row" id="modal-rating-row">
+        <label>Our rating</label>
+        <div class="star-rating" id="modal-my-rating">
+          ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-btn" data-n="${n}">${n <= myRating ? "★" : "☆"}</button>`).join("")}
+        </div>
+      </div>` : "";
 
   $("#modal-body").innerHTML = `
     ${hero}
@@ -624,7 +647,8 @@ function openModal(item) {
       <input class="modal-edit-title" id="modal-edit-title" value="${esc(item.title || item.raw_text || "")}" placeholder="Title" />
       ${item.url ? `<p>${link(item.url, "Open original")}</p>` : ""}
       <div class="modal-fields">${fields}</div>
-      <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="Add a note…">${esc(item.description || "")}</textarea>
+      <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="${isVisitKind ? "What did you think? Notes on your visit…" : "Add a note…"}">${esc(item.description || "")}</textarea>
+      ${ratingRow}
       <div class="modal-edit-date-row">
         <label for="modal-edit-date">Date</label>
         <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
@@ -636,7 +660,7 @@ function openModal(item) {
       </div>
       <div class="upload-row">
         <label class="btn-ghost" style="cursor:pointer;padding:6px 12px;border-radius:8px;">
-          ${item.image ? "Replace image" : "Upload image"}
+          ${item.image ? "Replace photo" : (isVisitKind ? "Add a photo from your visit" : "Upload image")}
           <input type="file" id="modal-upload" accept="image/*" style="display:none">
         </label>
         <span id="modal-upload-msg" class="muted"></span>
@@ -708,6 +732,19 @@ function openModal(item) {
     openModal(item); renderMainPreservingScroll(); saveSnapshot(); showToast(fav ? "Starred" : "Unstarred");
     syncPatch(item.id, { enriched: item.enriched }, () => { item.enriched = prevEnriched; renderMainPreservingScroll(); openModal(item); });
   };
+  $$("#modal-my-rating .star-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const n = Number(btn.dataset.n);
+      const current = (item.enriched && item.enriched.my_rating) || 0;
+      const next = current === n ? 0 : n; // clicking the current rating again clears it
+      const prevEnriched = item.enriched;
+      item.enriched = { ...(item.enriched || {}) };
+      if (next) item.enriched.my_rating = next; else delete item.enriched.my_rating;
+      openModal(item); renderMainPreservingScroll(); saveSnapshot();
+      showToast(next ? `Rated ${next} ${next === 1 ? "star" : "stars"}` : "Rating cleared");
+      syncPatch(item.id, { enriched: item.enriched }, () => { item.enriched = prevEnriched; renderMainPreservingScroll(); openModal(item); });
+    });
+  });
 
   $("#modal").classList.remove("hidden");
 }

@@ -272,6 +272,9 @@ input:focus, select:focus { border-color: var(--accent); }
 .modal-edit-note { width: 100%; resize: vertical; font-family: inherit; font-size: 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin-top: 8px; }
 .modal-edit-date-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
 .modal-edit-date { padding: 6px 10px; }
+.star-rating { display: flex; gap: 2px; }
+.star-rating .star-btn { background: transparent; border: none; padding: 0 1px; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
+.star-rating .star-btn:hover { color: #f59e0b; }
 .modal-edit-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .modal-star { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; border-radius: 4px; }
 .modal-star.faved { color: #f59e0b; border-color: #f59e0b; }
