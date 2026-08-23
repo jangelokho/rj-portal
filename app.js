@@ -230,7 +230,6 @@ async function selectList(id) {
 
 function currentList() { return state.lists.find((l) => l.id === state.currentListId); }
 function listNameOf(id) { return state.lists.find((l) => l.id === id)?.name || ""; }
-function listColorOf(id) { return state.lists.find((l) => l.id === id)?.color || DEFAULT_LIST_COLOR; }
 
 function saveSnapshot() {
   try {
@@ -412,7 +411,7 @@ function renderGlobalResults() {
 // without also triggering that click.
 function wireItemActions(el, item) {
   el.addEventListener("click", () => openModal(item));
-  el.querySelector(".card-check").addEventListener("click", async (e) => {
+  el.querySelector(".row-check").addEventListener("click", async (e) => {
     e.stopPropagation();
     const toDone = item.status !== "done";
     await applyPatch(item, { status: toDone ? "done" : "active" }, toDone ? "Marked done" : "Marked active");
@@ -429,9 +428,9 @@ function wireItemActions(el, item) {
 function renderRow(item, opts = {}) {
   const row = document.createElement("div");
   row.className = `row ${item.status}`;
-  row.style.setProperty("--card-accent", listColorOf(item.list_id));
   const listBadge = opts.showListName ? `<span class="list-badge">${esc(listNameOf(item.list_id))}</span>` : "";
   row.innerHTML = `
+    <button class="row-check ${item.status === "done" ? "done" : ""}" title="${item.status === "done" ? "Mark active" : "Mark done"}">✓</button>
     <div class="row-main">
       <div class="row-title">${esc(item.title || item.raw_text || "(untitled)")}</div>
       ${item.enriched?.address ? `<div class="row-address">${esc(item.enriched.address)}</div>` : ""}
@@ -439,7 +438,6 @@ function renderRow(item, opts = {}) {
     <div class="row-meta">${listBadge}${dateChip(item)}${ratingChip(item)}${categoryChip(item)}</div>
     <div class="row-actions">
       <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
-      <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
       <button class="card-archive">${item.status === "archived" ? "Unarchive" : "Archive"}</button>
     </div>`;
   wireItemActions(row, item);

@@ -152,19 +152,26 @@ input:focus, select:focus { border-color: var(--accent); }
   display: flex; align-items: center; gap: 12px;
   padding: 8px 12px; cursor: pointer;
   border-bottom: 1px solid var(--border);
-  border-left: 3px solid var(--card-accent, var(--accent));
   transition: background 0.1s ease;
 }
 .row:hover { background: var(--bg-card); }
 .row:last-child { border-bottom: none; }
 .row.done .row-title { text-decoration: line-through; color: var(--muted); }
 .row.archived { opacity: 0.6; }
+.row-check {
+  width: 20px; height: 20px; flex-shrink: 0; padding: 0;
+  border: 1.5px solid var(--border); border-radius: 4px;
+  background: transparent; color: transparent;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1;
+}
+.row-check:hover { border-color: var(--ok); }
+.row-check.done { background: var(--ok); border-color: var(--ok); color: #fff; }
 .row-main { flex: 1; min-width: 0; }
 .row-title { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-address { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); flex-shrink: 0; }
 .row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.row-actions .card-check, .row-actions .card-archive { padding: 3px 8px; font-size: 11px; }
+.row-actions .card-archive { padding: 3px 8px; font-size: 11px; }
 
 .empty { text-align: center; color: var(--muted); margin-top: 40px; }
 
@@ -211,11 +218,7 @@ input:focus, select:focus { border-color: var(--accent); }
 .all-lists { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; }
 .all-lists input { accent-color: var(--accent); }
 
-/* ---------- Card quick-actions ---------- */
-.card-check { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 3px 10px; font-size: 12px; }
-.card-check:hover { background: var(--bg-elev); color: var(--text); }
-.card-check.done { background: var(--ok); border-color: var(--ok); color: #fff; }
-.card-check.done:hover { filter: brightness(1.08); background: var(--ok); }
+/* ---------- Row quick-actions ---------- */
 .card-archive { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 3px 10px; font-size: 12px; }
 .card-archive:hover { background: var(--bg-elev); color: var(--text); }
 .list-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
@@ -380,7 +383,7 @@ body {
 
   /* Rows */
   .cards { padding: 10px; }
-  .card-check { padding: 6px 12px; }
+  .row-check { width: 24px; height: 24px; }
   .card-archive { padding: 6px 12px; }
   .card-star { font-size: 20px; padding: 4px 6px; }
   .row { gap: 8px; }
@@ -453,7 +456,7 @@ body {
 :root[data-theme="light"] .add-item-btn:hover { filter: brightness(0.94); }
 :root[data-theme="light"] input,
 :root[data-theme="light"] select,
-:root[data-theme="light"] textarea { background: var(--bg); }
+:root[data-theme="light"] textarea { background-color: var(--bg); } /* -color, not the shorthand — select's arrow background-image must survive this */
 
 /* Theme switch — matches the sidebar's ghost buttons. */
 .theme-btn {
