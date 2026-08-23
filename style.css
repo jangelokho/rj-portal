@@ -31,7 +31,7 @@ body {
 
 /* Headings share the body face now, so they lean on tighter tracking (not heavy
    weight) to stand apart instead of a separate display font. */
-.brand, .login-card h1, .main-title, .card-title,
+.brand, .login-card h1, .main-title,
 .modal-content h2, #form-title {
   font-family: var(--font-display);
   font-weight: 500;
@@ -131,33 +131,13 @@ input:focus, select:focus { border-color: var(--accent); }
 .rename-list-btn { background: transparent; border: 1px solid transparent; padding: 2px 6px; font-size: 15px; line-height: 1; }
 .rename-list-btn:hover { background: var(--bg-card); border-color: var(--border); }
 
-/* ---------- Cards ---------- */
+/* ---------- List (compact rows, thin divider between them, no boxed card) ---------- */
 .cards {
-  flex: 1; overflow-y: auto; padding: 20px 24px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  grid-auto-rows: max-content; /* rows must never compress cards — scroll instead */
-  gap: 16px; align-content: start;
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 0;
 }
-.card {
-  background: var(--bg-card);
-  border-radius: var(--radius); overflow: hidden; cursor: pointer;
-  display: flex; flex-direction: column; transition: transform 0.05s;
-}
-.card:active { transform: scale(0.997); }
-.card.done .card-title { text-decoration: line-through; color: var(--muted); }
-.card.archived { opacity: 0.6; }
-.card-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: var(--bg-elev); }
-.card-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
-.card-title { font-weight: 500; font-size: 15px; line-height: 1.3; }
-.card-desc { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.card-address { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-meta { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); margin-top: 2px; }
-.pill { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; }
 .date-chip { padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
 .date-chip.overdue { color: var(--danger); border-color: var(--danger); }
-
-/* ---------- List layout (compact rows — no per-item box, just a thin divider) ---------- */
-.cards.row-layout { display: flex; flex-direction: column; gap: 0; }
 .row {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 12px; cursor: pointer;
@@ -222,7 +202,6 @@ input:focus, select:focus { border-color: var(--accent); }
 .all-lists input { accent-color: var(--accent); }
 
 /* ---------- Card quick-actions ---------- */
-.card-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .card-check { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 3px 10px; font-size: 12px; }
 .card-check:hover { background: var(--bg-elev); color: var(--text); }
 .card-check.done { background: var(--ok); border-color: var(--ok); color: #fff; }
@@ -252,7 +231,6 @@ input:focus, select:focus { border-color: var(--accent); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ---------- Alternating card shades ---------- */
-.cards .card:nth-child(even) { background: var(--bg-card-alt); }
 
 /* ---------- Starred toggle + toolbar-right ---------- */
 .starred-toggle { background: var(--bg-elev); border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; white-space: nowrap; }
@@ -263,7 +241,6 @@ input:focus, select:focus { border-color: var(--accent); }
 .card-star { background: transparent; border: none; padding: 0 2px; font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer; }
 .card-star:hover { background: transparent; color: #f59e0b; }
 .card-star.faved { color: #f59e0b; }
-.card-meta .spacer { flex: 1; }
 
 /* ---------- Modal editable fields ---------- */
 .modal-edit-title { width: 100%; font-family: var(--font-display); font-size: 22px; font-weight: 500; background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text); padding: 2px 0; }
@@ -329,17 +306,6 @@ body {
 .add-item-btn:hover { filter: brightness(1.08); background: var(--list-accent); }
 .status-filter button.active { background: var(--list-accent); border-color: var(--list-accent); color: #fff; }
 
-/* Cards */
-.cards { gap: 10px; padding: 16px 20px; }
-.card {
-  border-radius: var(--radius);
-  border-left: 3px solid var(--card-accent, var(--accent));
-  box-shadow: var(--shadow-sm);
-  transition: transform .12s ease, box-shadow .12s ease;
-}
-.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-.card-title { font-size: 15px; }
-.card-img { aspect-ratio: 16 / 10; }
 .card-star:hover, .card-star.faved { color: #f59e0b; }
 
 /* Empty state */
@@ -404,16 +370,13 @@ body {
   .toolbar-right { margin-left: 0; width: 100%; gap: 8px; }
   .toolbar-right #search { flex: 1; min-width: 0; }
 
-  /* Cards */
-  .cards { padding: 10px; gap: 8px; grid-template-columns: 1fr; }
-  .card-actions { gap: 12px; }
+  /* Rows */
+  .cards { padding: 10px; }
   .card-check { padding: 6px 12px; }
   .card-archive { padding: 6px 12px; }
   .card-star { font-size: 20px; padding: 4px 6px; }
-
-  /* Row layout — the meta column (list badge, date) is the first thing to go on a phone. */
-  .row-meta { display: none; }
   .row { gap: 8px; }
+  .row-meta .list-badge { display: none; } /* only relevant in "All lists" search — date/rating stay visible */
 
   /* Modals → bottom sheets */
   .modal { place-items: end center; }

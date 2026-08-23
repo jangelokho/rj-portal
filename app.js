@@ -4,7 +4,6 @@
 
 const PW_KEY = "rj_portal_pw";
 const SORT_KEY = "rj_sort";   // 'newest' | 'oldest'
-const LAYOUT_KEY = "rj_layout"; // 'blocks' | 'list'
 const SNAP_KEY = "rj_snapshot"; // last view {lists, listId, items} for instant paint
 const THEME_KEY = "rj_theme";   // 'light' | 'dark'; absent = follow the OS
 
@@ -68,7 +67,6 @@ const state = {
   allLists: false,
   starredOnly: false,
   sortOrder: localStorage.getItem(SORT_KEY) || "newest",
-  layout: localStorage.getItem(LAYOUT_KEY) || "blocks", // 'blocks' (card grid) | 'list' (compact rows)
   formImageUrl: null,        // image chosen in the add form
   lastFetchedUrl: "",        // dedupe auto-preview fetches
 };
@@ -166,9 +164,8 @@ applyTheme(currentTheme(), false); // sync the button with what the bootstrap ch
 
 // ---------- Init / data ----------
 async function init() {
-  // reflect persisted sort + layout in the controls
+  // reflect persisted sort in the controls
   $("#sort-select").value = state.sortOrder;
-  $$("#layout-toggle button").forEach((b) => b.classList.toggle("active", b.dataset.layout === state.layout));
 
   // Instant paint from the last session's snapshot, then refresh from the network.
   let snap = null;
@@ -324,14 +321,6 @@ $("#delete-list-btn").addEventListener("click", async () => {
 $("#sort-select").addEventListener("change", (e) => {
   state.sortOrder = e.target.value; localStorage.setItem(SORT_KEY, state.sortOrder); renderMain();
 });
-$$("#layout-toggle button").forEach((b) =>
-  b.addEventListener("click", () => {
-    state.layout = b.dataset.layout;
-    localStorage.setItem(LAYOUT_KEY, state.layout);
-    $$("#layout-toggle button").forEach((x) => x.classList.toggle("active", x === b));
-    renderMain();
-  })
-);
 $("#search").addEventListener("input", async (e) => {
   state.search = e.target.value;
   if (state.allLists && !state.allItems) state.allItems = await api("/api/items?all=true");
@@ -371,7 +360,6 @@ function renderMain() {
   const g = globalMode();
   $("#status-filter").style.display = g ? "none" : "";
   $("#country-filter").style.display = (!g && currentList()?.kind === "restaurant") ? "" : "none";
-  $("#cards").classList.toggle("row-layout", state.layout === "list");
   if (g) { renderGlobalResults(); return; }
   renderList();
 }
@@ -410,7 +398,7 @@ function renderList() {
         'Add one with "+ Add item" — or send it to Darth Mitbot.');
   $("#empty").classList.toggle("hidden", items.length > 0);
   const wrap = $("#cards"); wrap.innerHTML = "";
-  items.forEach((it) => wrap.appendChild(renderItem(it, {})));
+  items.forEach((it) => wrap.appendChild(renderRow(it, {})));
 }
 
 function renderGlobalResults() {
@@ -421,11 +409,10 @@ function renderGlobalResults() {
   $("#empty").innerHTML = emptyHTML("No matches.", "Try a different search.");
   $("#empty").classList.toggle("hidden", items.length > 0);
   const wrap = $("#cards"); wrap.innerHTML = "";
-  items.forEach((it) => wrap.appendChild(renderItem(it, { showListName: true })));
+  items.forEach((it) => wrap.appendChild(renderRow(it, { showListName: true })));
 }
 
-// Shared by both layouts: click-anywhere opens the detail modal; the three action
-// buttons (present in both templates under these same class names) do their thing
+// click-anywhere opens the detail modal; the three action buttons do their thing
 // without also triggering that click.
 function wireItemActions(el, item) {
   el.addEventListener("click", () => openModal(item));
@@ -442,38 +429,7 @@ function wireItemActions(el, item) {
   el.querySelector(".card-star").addEventListener("click", async (e) => { e.stopPropagation(); await toggleFav(item); });
 }
 
-// ---------- Blocks layout (card grid) ----------
-function renderCard(item, opts = {}) {
-  const card = document.createElement("div");
-  card.className = `card ${item.status}`;
-  card.style.setProperty("--card-accent", listColorOf(item.list_id));
-  const img = item.image
-    ? `<img class="card-img" src="${esc(item.image)}" alt="" loading="lazy" onerror="this.remove()">` : "";
-  const listBadge = opts.showListName ? `<span class="list-badge">${esc(listNameOf(item.list_id))}</span>` : "";
-  card.innerHTML = `
-    ${img}
-    <div class="card-body">
-      <div class="card-title">${esc(item.title || item.raw_text || "(untitled)")}</div>
-      ${item.enriched?.address ? `<div class="card-address">${esc(item.enriched.address)}</div>` : ""}
-      ${item.description ? `<div class="card-desc">${esc(item.description)}</div>` : ""}
-      <div class="card-meta">
-        <span class="pill">${esc(item.type || "item")}</span>
-        ${listBadge}
-        ${dateChip(item)}
-        ${ratingChip(item)}
-        <span class="spacer"></span>
-        <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
-      </div>
-      <div class="card-actions">
-        <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
-        <button class="card-archive">${item.status === "archived" ? "Unarchive" : "Archive"}</button>
-      </div>
-    </div>`;
-  wireItemActions(card, item);
-  return card;
-}
-
-// ---------- List layout (compact single-column rows) ----------
+// ---------- Compact list rows ----------
 function renderRow(item, opts = {}) {
   const row = document.createElement("div");
   row.className = `row ${item.status}`;
@@ -492,10 +448,6 @@ function renderRow(item, opts = {}) {
     </div>`;
   wireItemActions(row, item);
   return row;
-}
-
-function renderItem(item, opts = {}) {
-  return state.layout === "list" ? renderRow(item, opts) : renderCard(item, opts);
 }
 
 // Favorite is stored in enriched.favorite; merge client-side (PostgREST replaces the whole jsonb).
