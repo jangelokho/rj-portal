@@ -2,7 +2,7 @@
 // respond from cache instantly, refresh the cache in the background.
 // /api/* is never cached (the app keeps its own localStorage snapshot for instant data).
 // Bump CACHE to invalidate after big changes.
-const CACHE = "rj-portal-v3";
+const CACHE = "rj-portal-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
