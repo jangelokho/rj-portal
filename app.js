@@ -587,8 +587,8 @@ function openModal(item) {
         </div>
       </div>` : "";
 
-  const categoryRow = kind === "buyable" ? `
-      <div class="modal-edit-date-row">
+  const categoryField = kind === "buyable" ? `
+      <div class="modal-field-group">
         <label for="modal-edit-category">Category</label>
         <select class="modal-edit-date" id="modal-edit-category">
           <option value="" ${!e.category ? "selected" : ""}>None</option>
@@ -604,13 +604,15 @@ function openModal(item) {
         <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
       </div>
       ${item.url ? `<p>${link(item.url, "Open original")}</p>` : ""}
-      <div class="modal-fields">${fields}</div>
+      ${fields ? `<div class="modal-fields">${fields}</div>` : ""}
       <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="${isVisitKind ? "What did you think? Notes on your visit…" : "Add a note…"}">${esc(item.description || "")}</textarea>
       ${ratingRow}
-      ${categoryRow}
-      <div class="modal-edit-date-row">
-        <label for="modal-edit-date">Date</label>
-        <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
+      <div class="modal-meta-row">
+        ${categoryField}
+        <div class="modal-field-group">
+          <label for="modal-edit-date">Date</label>
+          <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
+        </div>
       </div>
       <div class="upload-row">
         <label class="btn-ghost upload-label">

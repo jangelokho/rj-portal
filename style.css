@@ -192,7 +192,11 @@ input:focus, select:focus { border-color: var(--accent); }
 .modal-hero { width: 100%; max-height: 280px; object-fit: cover; display: block; }
 .modal-content { padding: 22px 24px; }
 .modal-content h2 { margin: 0 0 4px; font-size: 22px; }
-.modal-fields { margin: 16px 0; display: flex; flex-direction: column; gap: 10px; }
+/* One consistent gap between every stacked block in the modal, instead of each block
+   carrying its own ad-hoc margin — otherwise an absent optional block (no enrichment
+   fields, no rating row, etc.) leaves an inconsistent or doubled-up gap behind. */
+.modal-content > * + * { margin-top: 14px; }
+.modal-fields { display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; gap: 10px; font-size: 14px; }
 .field-label { color: var(--muted); min-width: 92px; flex-shrink: 0; }
 .field-value { flex: 1; }
@@ -234,7 +238,7 @@ input:focus, select:focus { border-color: var(--accent); }
 .form-actions { display: flex; gap: 8px; margin-top: 4px; }
 
 /* ---------- Modal upload row ---------- */
-.upload-row { display: flex; align-items: center; gap: 10px; margin: 12px 0; font-size: 13px; color: var(--muted); }
+.upload-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 /* A <label> doesn't get the base button{} tag rule for free — matches it explicitly so
    this reads identically to every other button instead of the old one-off inline style. */
 .upload-label { display: inline-flex; align-items: center; cursor: pointer; font: inherit; padding: 8px 14px; border-radius: 4px; }
@@ -259,11 +263,18 @@ input:focus, select:focus { border-color: var(--accent); }
 /* Leaves room on the right for the close button, which sits above this row —
    without it, the title's background would run underneath the close button. */
 .modal-title-row { display: flex; align-items: center; gap: 8px; padding-right: 40px; }
-.modal-edit-title { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 22px; font-weight: 500; background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text); padding: 2px 0; }
-.modal-edit-title:hover { border-bottom-color: var(--border); }
-.modal-edit-title:focus { border-bottom-color: var(--accent); outline: none; }
-.modal-edit-note { width: 100%; resize: vertical; font-family: inherit; font-size: 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin-top: 8px; }
-.modal-edit-date-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.modal-edit-title {
+  flex: 1; min-width: 0; font-family: var(--font-display); font-size: 22px; font-weight: 500;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); padding: 10px 14px;
+}
+.modal-edit-title:focus { border-color: var(--accent); outline: none; }
+.modal-edit-note { width: 100%; resize: vertical; font-family: inherit; font-size: 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; }
+/* Standalone label+control row (used by "Our rating"). */
+.modal-edit-date-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+/* Category + Date side by side — same label+control shape, just two of them in a row. */
+.modal-meta-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.modal-field-group { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .modal-edit-date { padding: 6px 10px; }
 .star-rating { display: flex; gap: 2px; }
 .star-rating .star-btn { background: transparent; border: none; padding: 0 1px; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
