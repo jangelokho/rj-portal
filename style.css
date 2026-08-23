@@ -62,6 +62,7 @@ input, select {
   padding: 8px 12px;
   outline: none;
 }
+select { padding-right: 30px; } /* breathing room before the native dropdown arrow */
 input:focus, select:focus { border-color: var(--accent); }
 
 /* ---------- Login ---------- */
@@ -288,6 +289,7 @@ body {
   border-radius: 0 2px 2px 0; background: var(--list-accent);
 }
 .list-name { font-weight: 500; }
+.list-item.selected .list-name { font-weight: 600; }
 .list-count { background: var(--chip-bg); }
 .list-item.selected .list-count { background: var(--list-accent); color: #fff; }
 
