@@ -19,8 +19,8 @@
 // PHP conversion is applied ONLY to the summary totals (category + monthly), never to
 // individual rows, per Ria's request. FX_RATE is a fixed reference rate, not a live
 // feed — adjust below if you want a different one.
-window.FX_RATE = 43.5; // approx SGD → PHP, Aug 2026
-window.FX_NOTE = "Fixed reference rate (₱43.5 per S$1) — not a live feed. Adjust FX_RATE in finance-data.js if you want a different one.";
+window.FX_RATE = 49; // conservative fixed SGD → PHP rate, set deliberately above market
+window.FX_NOTE = "Fixed reference rate (₱49 per S$1, kept conservatively high) — not a live feed. Adjust FX_RATE in finance-data.js if you want a different one.";
 
 const CARD_TXNS = [
   // June 2026 statement (cycle ending 19 Jun)
