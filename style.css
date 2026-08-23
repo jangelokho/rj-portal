@@ -5,8 +5,9 @@
   --bg-card-alt: #232834;
   --border: #2a2f3a;
   /* Google Sans Flex (loaded in index.html via Google Fonts, variable font — weights
-     400-600 requested). Google's actual own typeface, published on Google Fonts under
-     this name. Falls back to each platform's system UI font while it loads. */
+     300-600 requested, the 300 for the sidebar's thin unselected list names). Google's
+     actual own typeface, published on Google Fonts under this name. Falls back to each
+     platform's system UI font while it loads. */
   --font-body: "Google Sans Flex", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
                Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-display: var(--font-body);
@@ -289,8 +290,8 @@ body {
   content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
   border-radius: 0 2px 2px 0; background: var(--list-accent);
 }
-.list-name { font-weight: 400; }
-.list-item.selected .list-name { font-weight: 600; }
+.list-name { font-weight: 300; }
+.list-item.selected .list-name { font-weight: 500; }
 .list-count { background: var(--chip-bg); }
 .list-item.selected .list-count { background: var(--list-accent); color: #fff; }
 
