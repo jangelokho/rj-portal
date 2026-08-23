@@ -18,6 +18,17 @@ const USER_NAMES = {
 
 function isFav(it) { return !!(it.enriched && it.enriched.favorite); }
 
+// Country is derived from the Places-enriched address (restaurant/place kinds only) — no
+// separate field to keep in sync. Items added in bulk (colon shortcuts, "Add to X:") skip
+// enrichment entirely and have no address, so they fall into "Unspecified" until re-added
+// singly or edited with a real address.
+function itemCountry(item) {
+  const addr = (item.enriched && item.enriched.address) || "";
+  if (/singapore/i.test(addr)) return "SG";
+  if (/philippines/i.test(addr)) return "PH";
+  return null;
+}
+
 // Active items show their own due_date (the plain "set a date" field); done/archived
 // items show when that happened instead — status_changed_at, stamped by a DB trigger only
 // on an actual status change, so editing a note later never overwrites it.
@@ -39,6 +50,7 @@ const state = {
   itemsCache: {},            // listId -> items, for instant list switching
   allItems: null,            // cache for global search
   statusFilter: "active",
+  countryFilter: "all", // 'all' | 'SG' | 'PH' | 'other' — restaurant/place lists only
   search: "",
   allLists: false,
   starredOnly: false,
@@ -178,6 +190,8 @@ function applyListHeader() {
 async function selectList(id) {
   state.currentListId = id;
   state.allLists = false; $("#all-lists-toggle").checked = false;
+  state.countryFilter = "all";
+  $$("#country-filter button").forEach((b) => b.classList.toggle("active", b.dataset.country === "all"));
   renderSidebar();
   applyListHeader();
   const cached = state.itemsCache[id];
@@ -312,6 +326,13 @@ $$("#status-filter button").forEach((b) =>
     renderMain();
   })
 );
+$$("#country-filter button").forEach((b) =>
+  b.addEventListener("click", () => {
+    state.countryFilter = b.dataset.country;
+    $$("#country-filter button").forEach((x) => x.classList.toggle("active", x === b));
+    renderMain();
+  })
+);
 $("#starred-toggle").addEventListener("click", () => {
   state.starredOnly = !state.starredOnly;
   const btn = $("#starred-toggle");
@@ -325,6 +346,7 @@ function globalMode() { return state.allLists && state.search.trim().length > 0;
 function renderMain() {
   const g = globalMode();
   $("#status-filter").style.display = g ? "none" : "";
+  $("#country-filter").style.display = (!g && currentList()?.kind === "restaurant") ? "" : "none";
   if (g) { renderGlobalResults(); return; }
   renderList();
 }
@@ -349,11 +371,14 @@ function matches(it, q) {
 
 function renderList() {
   const q = state.search.trim().toLowerCase();
+  const list = currentList();
   let items = state.items.filter((it) => state.statusFilter === "all" || it.status === state.statusFilter);
   if (q) items = items.filter((it) => matches(it, q));
   if (state.starredOnly) items = items.filter(isFav);
+  if (list?.kind === "restaurant" && state.countryFilter !== "all") {
+    items = items.filter((it) => (itemCountry(it) || "other") === state.countryFilter);
+  }
   items = sortItems(items);
-  const list = currentList();
   $("#empty").innerHTML = state.starredOnly
     ? emptyHTML("No starred items here.", "Tap a card's Fav button to pin it to the top.")
     : emptyHTML(`Nothing in ${list ? list.name : "this list"} yet.`,
@@ -386,6 +411,7 @@ function renderCard(item, opts = {}) {
     ${img}
     <div class="card-body">
       <div class="card-title">${esc(item.title || item.raw_text || "(untitled)")}</div>
+      ${item.enriched?.address ? `<div class="card-address">${esc(item.enriched.address)}</div>` : ""}
       ${item.description ? `<div class="card-desc">${esc(item.description)}</div>` : ""}
       <div class="card-meta">
         <span class="pill">${esc(item.type || "item")}</span>
