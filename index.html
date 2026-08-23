@@ -63,23 +63,32 @@
         </div>
         <div class="toolbar">
           <button id="add-item-btn" class="add-item-btn">+ Add item</button>
-          <div id="status-filter" class="status-filter">
-            <button data-status="active" class="active">Active</button>
-            <button data-status="done">Done</button>
-            <button data-status="archived">Archived</button>
-            <button data-status="all">All</button>
-          </div>
-          <div id="country-filter" class="status-filter" title="Restaurants only — derived from the saved address">
-            <button data-country="all" class="active">All</button>
-            <button data-country="SG">SG</button>
-            <button data-country="PH">PH</button>
-            <button data-country="other">Other</button>
-          </div>
+          <select id="status-filter" title="Filter by status">
+            <option value="active">Active</option>
+            <option value="done">Done</option>
+            <option value="archived">Archived</option>
+            <option value="all">All</option>
+            <option value="starred">☆ Starred</option>
+          </select>
           <select id="sort-select" title="Sort by create date">
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
           </select>
-          <button id="starred-toggle" class="starred-toggle" title="Show starred only">☆ Starred</button>
+          <select id="country-filter" title="Restaurants only — derived from the saved address">
+            <option value="all">All countries</option>
+            <option value="SG">SG</option>
+            <option value="PH">PH</option>
+            <option value="other">Other</option>
+          </select>
+          <select id="category-filter" title="Buyables only">
+            <option value="all">All categories</option>
+            <option value="Grocery">Grocery</option>
+            <option value="Medicine">Medicine</option>
+            <option value="Personal">Personal</option>
+            <option value="Wants">Wants</option>
+            <option value="Work">Work</option>
+            <option value="none">Uncategorized</option>
+          </select>
           <div class="toolbar-right">
             <label class="all-lists"><input id="all-lists-toggle" type="checkbox" /> All lists</label>
             <input id="search" type="search" placeholder="Search…" />
@@ -120,6 +129,16 @@
           </label>
           <label>Date
             <input id="f-date" type="date" />
+          </label>
+          <label id="f-category-row" class="hidden">Category
+            <select id="f-category">
+              <option value="">None</option>
+              <option value="Grocery">Grocery</option>
+              <option value="Medicine">Medicine</option>
+              <option value="Personal">Personal</option>
+              <option value="Wants">Wants</option>
+              <option value="Work">Work</option>
+            </select>
           </label>
           <label>Image
             <input id="f-image-file" type="file" accept="image/*" />

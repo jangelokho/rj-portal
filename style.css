@@ -123,9 +123,6 @@ input:focus, select:focus { border-color: var(--accent); }
 .main-title { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 500; }
 .toolbar { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .toolbar #search { flex: 1; min-width: 160px; }
-.status-filter { display: flex; gap: 4px; }
-.status-filter button { background: var(--bg-elev); border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; }
-.status-filter button.active { background: var(--accent); color: white; border-color: var(--accent); }
 .delete-list-btn { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 .delete-list-btn:hover { background: var(--danger); color: white; }
 .rename-list-btn { background: transparent; border: 1px solid transparent; padding: 2px 6px; font-size: 15px; line-height: 1; }
@@ -232,9 +229,6 @@ input:focus, select:focus { border-color: var(--accent); }
 
 /* ---------- Alternating card shades ---------- */
 
-/* ---------- Starred toggle + toolbar-right ---------- */
-.starred-toggle { background: var(--bg-elev); border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; white-space: nowrap; }
-.starred-toggle.active { background: #f59e0b; border-color: #f59e0b; color: #1a1205; }
 .toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 
 /* ---------- Favorite star on cards ---------- */
@@ -304,7 +298,7 @@ body {
 /* Toolbar — themed active states */
 .add-item-btn { background: var(--list-accent); box-shadow: var(--shadow-sm); }
 .add-item-btn:hover { filter: brightness(1.08); background: var(--list-accent); }
-.status-filter button.active { background: var(--list-accent); border-color: var(--list-accent); color: #fff; }
+#status-filter, #sort-select, #country-filter, #category-filter { border-color: var(--list-accent); }
 
 .card-star:hover, .card-star.faved { color: #f59e0b; }
 

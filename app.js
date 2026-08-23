@@ -55,17 +55,25 @@ function ratingChip(item) {
   return `<span class="date-chip">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
 }
 
+const BUYABLE_CATEGORIES = ["Grocery", "Medicine", "Personal", "Wants", "Work"];
+
+function categoryChip(item) {
+  if (itemKind(item) !== "buyable") return "";
+  const cat = item.enriched && item.enriched.category;
+  return cat ? `<span class="date-chip">${esc(cat)}</span>` : "";
+}
+
 const state = {
   lists: [],
   currentListId: null,
   items: [],
   itemsCache: {},            // listId -> items, for instant list switching
   allItems: null,            // cache for global search
-  statusFilter: "active",
+  statusFilter: "active", // 'active' | 'done' | 'archived' | 'all' | 'starred'
   countryFilter: "all", // 'all' | 'SG' | 'PH' | 'other' — restaurant/place lists only
+  categoryFilter: "all", // 'all' | 'Grocery' | 'Medicine' | 'Personal' | 'Wants' | 'Work' | 'none' — buyable lists only
   search: "",
   allLists: false,
-  starredOnly: false,
   sortOrder: localStorage.getItem(SORT_KEY) || "newest",
   formImageUrl: null,        // image chosen in the add form
   lastFetchedUrl: "",        // dedupe auto-preview fetches
@@ -202,8 +210,8 @@ function applyListHeader() {
 async function selectList(id) {
   state.currentListId = id;
   state.allLists = false; $("#all-lists-toggle").checked = false;
-  state.countryFilter = "all";
-  $$("#country-filter button").forEach((b) => b.classList.toggle("active", b.dataset.country === "all"));
+  state.countryFilter = "all"; $("#country-filter").value = "all";
+  state.categoryFilter = "all"; $("#category-filter").value = "all";
   renderSidebar();
   applyListHeader();
   const cached = state.itemsCache[id];
@@ -331,27 +339,9 @@ $("#all-lists-toggle").addEventListener("change", async (e) => {
   if (state.allLists && !state.allItems) state.allItems = await api("/api/items?all=true");
   renderMain();
 });
-$$("#status-filter button").forEach((b) =>
-  b.addEventListener("click", () => {
-    state.statusFilter = b.dataset.status;
-    $$("#status-filter button").forEach((x) => x.classList.toggle("active", x === b));
-    renderMain();
-  })
-);
-$$("#country-filter button").forEach((b) =>
-  b.addEventListener("click", () => {
-    state.countryFilter = b.dataset.country;
-    $$("#country-filter button").forEach((x) => x.classList.toggle("active", x === b));
-    renderMain();
-  })
-);
-$("#starred-toggle").addEventListener("click", () => {
-  state.starredOnly = !state.starredOnly;
-  const btn = $("#starred-toggle");
-  btn.classList.toggle("active", state.starredOnly);
-  btn.textContent = (state.starredOnly ? "★" : "☆") + " Starred";
-  renderMain();
-});
+$("#status-filter").addEventListener("change", (e) => { state.statusFilter = e.target.value; renderMain(); });
+$("#country-filter").addEventListener("change", (e) => { state.countryFilter = e.target.value; renderMain(); });
+$("#category-filter").addEventListener("change", (e) => { state.categoryFilter = e.target.value; renderMain(); });
 
 // ---------- Render dispatch ----------
 function globalMode() { return state.allLists && state.search.trim().length > 0; }
@@ -360,6 +350,7 @@ function renderMain() {
   const g = globalMode();
   $("#status-filter").style.display = g ? "none" : "";
   $("#country-filter").style.display = (!g && currentList()?.kind === "restaurant") ? "" : "none";
+  $("#category-filter").style.display = (!g && currentList()?.kind === "buyable") ? "" : "none";
   if (g) { renderGlobalResults(); return; }
   renderList();
 }
@@ -385,14 +376,20 @@ function matches(it, q) {
 function renderList() {
   const q = state.search.trim().toLowerCase();
   const list = currentList();
-  let items = state.items.filter((it) => state.statusFilter === "all" || it.status === state.statusFilter);
+  let items = state.items.filter((it) => {
+    if (state.statusFilter === "all") return true;
+    if (state.statusFilter === "starred") return isFav(it);
+    return it.status === state.statusFilter;
+  });
   if (q) items = items.filter((it) => matches(it, q));
-  if (state.starredOnly) items = items.filter(isFav);
   if (list?.kind === "restaurant" && state.countryFilter !== "all") {
     items = items.filter((it) => (itemCountry(it) || "other") === state.countryFilter);
   }
+  if (list?.kind === "buyable" && state.categoryFilter !== "all") {
+    items = items.filter((it) => (it.enriched?.category || "none") === state.categoryFilter);
+  }
   items = sortItems(items);
-  $("#empty").innerHTML = state.starredOnly
+  $("#empty").innerHTML = state.statusFilter === "starred"
     ? emptyHTML("No starred items here.", "Tap a card's Fav button to pin it to the top.")
     : emptyHTML(`Nothing in ${list ? list.name : "this list"} yet.`,
         'Add one with "+ Add item" — or send it to Darth Mitbot.');
@@ -404,7 +401,6 @@ function renderList() {
 function renderGlobalResults() {
   const q = state.search.trim().toLowerCase();
   let items = (state.allItems || []).filter((it) => matches(it, q));
-  if (state.starredOnly) items = items.filter(isFav);
   items = sortItems(items);
   $("#empty").innerHTML = emptyHTML("No matches.", "Try a different search.");
   $("#empty").classList.toggle("hidden", items.length > 0);
@@ -440,7 +436,7 @@ function renderRow(item, opts = {}) {
       <div class="row-title">${esc(item.title || item.raw_text || "(untitled)")}</div>
       ${item.enriched?.address ? `<div class="row-address">${esc(item.enriched.address)}</div>` : ""}
     </div>
-    <div class="row-meta">${listBadge}${dateChip(item)}${ratingChip(item)}</div>
+    <div class="row-meta">${listBadge}${dateChip(item)}${ratingChip(item)}${categoryChip(item)}</div>
     <div class="row-actions">
       <button class="card-star ${isFav(item) ? "faved" : ""}" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
       <button class="card-check ${item.status === "done" ? "done" : ""}">${item.status === "done" ? "Done" : "Mark done"}</button>
@@ -593,6 +589,15 @@ function openModal(item) {
         </div>
       </div>` : "";
 
+  const categoryRow = kind === "buyable" ? `
+      <div class="modal-edit-date-row">
+        <label for="modal-edit-category">Category</label>
+        <select class="modal-edit-date" id="modal-edit-category">
+          <option value="" ${!e.category ? "selected" : ""}>None</option>
+          ${BUYABLE_CATEGORIES.map((c) => `<option value="${c}" ${e.category === c ? "selected" : ""}>${c}</option>`).join("")}
+        </select>
+      </div>` : "";
+
   $("#modal-body").innerHTML = `
     ${hero}
     <div class="modal-content">
@@ -601,6 +606,7 @@ function openModal(item) {
       <div class="modal-fields">${fields}</div>
       <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="${isVisitKind ? "What did you think? Notes on your visit…" : "Add a note…"}">${esc(item.description || "")}</textarea>
       ${ratingRow}
+      ${categoryRow}
       <div class="modal-edit-date-row">
         <label for="modal-edit-date">Date</label>
         <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
@@ -662,18 +668,29 @@ function openModal(item) {
     } catch (err) { $("#modal-upload-msg").textContent = err.message; }
   });
 
-  // Editable title + note + date
+  // Editable title + note + date + (buyable only) category
   const titleEl = $("#modal-edit-title"), noteEl = $("#modal-edit-note"), dateEl = $("#modal-edit-date"), saveBtn = $("#modal-save-edit");
-  const origT = titleEl.value, origN = noteEl.value, origD = dateEl.value;
-  const onEdit = () => { saveBtn.disabled = titleEl.value === origT && noteEl.value === origN && dateEl.value === origD; };
+  const categoryEl = $("#modal-edit-category");
+  const origT = titleEl.value, origN = noteEl.value, origD = dateEl.value, origC = categoryEl ? categoryEl.value : null;
+  const onEdit = () => {
+    saveBtn.disabled = titleEl.value === origT && noteEl.value === origN && dateEl.value === origD
+      && (!categoryEl || categoryEl.value === origC);
+  };
   titleEl.addEventListener("input", onEdit);
   noteEl.addEventListener("input", onEdit);
   dateEl.addEventListener("input", onEdit);
+  if (categoryEl) categoryEl.addEventListener("change", onEdit);
   saveBtn.onclick = () => {
     saveBtn.disabled = true;
     const patch = { title: titleEl.value.trim() || null, description: noteEl.value.trim() || null, due_date: dateEl.value || null };
     const prev = { title: item.title, description: item.description, due_date: item.due_date };
     item.title = patch.title; item.description = patch.description; item.due_date = patch.due_date;
+    if (categoryEl) {
+      prev.enriched = item.enriched;
+      item.enriched = { ...(item.enriched || {}) };
+      if (categoryEl.value) item.enriched.category = categoryEl.value; else delete item.enriched.category;
+      patch.enriched = item.enriched;
+    }
     renderMainPreservingScroll(); saveSnapshot(); showToast("Saved"); openModal(item);
     syncPatch(item.id, patch, () => { Object.assign(item, prev); renderMainPreservingScroll(); openModal(item); });
   };
@@ -713,6 +730,8 @@ function openAddForm() {
   state.lastFetchedUrl = "";
   $("#form-title").textContent = `Add to ${list.name}`;
   $("#f-title").value = ""; $("#f-url").value = ""; $("#f-desc").value = ""; $("#f-date").value = "";
+  $("#f-category").value = "";
+  $("#f-category-row").classList.toggle("hidden", list.kind !== "buyable");
   $("#f-image-file").value = "";
   $("#f-image-preview").classList.add("hidden"); $("#f-image-preview").src = "";
   $("#f-status-msg").textContent = "";
@@ -769,6 +788,9 @@ $("#add-form").addEventListener("submit", async (e) => {
     raw_text: (!title && !url) ? description || null : null,
     due_date: $("#f-date").value || null,
   };
+  if (list.kind === "buyable" && $("#f-category").value) {
+    body.enriched = { category: $("#f-category").value };
+  }
   $("#f-save").disabled = true;
   try {
     const created = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
