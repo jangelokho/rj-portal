@@ -139,11 +139,10 @@ input:focus, select:focus { border-color: var(--accent); }
   gap: 16px; align-content: start;
 }
 .card {
-  background: var(--bg-card); border: 1px solid var(--border);
+  background: var(--bg-card);
   border-radius: var(--radius); overflow: hidden; cursor: pointer;
-  display: flex; flex-direction: column; transition: border-color 0.15s, transform 0.05s;
+  display: flex; flex-direction: column; transition: transform 0.05s;
 }
-.card:hover { border-color: var(--accent); }
 .card:active { transform: scale(0.997); }
 .card.done .card-title { text-decoration: line-through; color: var(--muted); }
 .card.archived { opacity: 0.6; }
@@ -156,6 +155,26 @@ input:focus, select:focus { border-color: var(--accent); }
 .pill { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; }
 .date-chip { padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
 .date-chip.overdue { color: var(--danger); border-color: var(--danger); }
+
+/* ---------- List layout (compact rows — no per-item box, just a thin divider) ---------- */
+.cards.row-layout { display: flex; flex-direction: column; gap: 0; }
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--card-accent, var(--accent));
+  transition: background 0.1s ease;
+}
+.row:hover { background: var(--bg-card); }
+.row:last-child { border-bottom: none; }
+.row.done .row-title { text-decoration: line-through; color: var(--muted); }
+.row.archived { opacity: 0.6; }
+.row-main { flex: 1; min-width: 0; }
+.row-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-address { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.row-actions .card-check, .row-actions .card-archive { padding: 3px 8px; font-size: 11px; }
 
 .empty { text-align: center; color: var(--muted); margin-top: 40px; }
 
@@ -308,10 +327,10 @@ body {
 .status-filter button.active { background: var(--list-accent); border-color: var(--list-accent); color: #fff; }
 
 /* Cards */
-.cards { gap: 18px; padding: 22px 28px; }
+.cards { gap: 10px; padding: 16px 20px; }
 .card {
   border-radius: var(--radius);
-  border-left: 4px solid var(--card-accent, var(--accent));
+  border-left: 3px solid var(--card-accent, var(--accent));
   box-shadow: var(--shadow-sm);
   transition: transform .12s ease, box-shadow .12s ease;
 }
@@ -383,11 +402,15 @@ body {
   .toolbar-right #search { flex: 1; min-width: 0; }
 
   /* Cards */
-  .cards { padding: 14px; gap: 12px; grid-template-columns: 1fr; }
+  .cards { padding: 10px; gap: 8px; grid-template-columns: 1fr; }
   .card-actions { gap: 12px; }
   .card-check { padding: 6px 12px; }
   .card-archive { padding: 6px 12px; }
   .card-star { font-size: 20px; padding: 4px 6px; }
+
+  /* Row layout — the meta column (list badge, date) is the first thing to go on a phone. */
+  .row-meta { display: none; }
+  .row { gap: 8px; }
 
   /* Modals → bottom sheets */
   .modal { place-items: end center; }
