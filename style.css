@@ -289,7 +289,7 @@ body {
   content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
   border-radius: 0 2px 2px 0; background: var(--list-accent);
 }
-.list-name { font-weight: 500; }
+.list-name { font-weight: 400; }
 .list-item.selected .list-name { font-weight: 600; }
 .list-count { background: var(--chip-bg); }
 .list-item.selected .list-count { background: var(--list-accent); color: #fff; }
