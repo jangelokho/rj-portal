@@ -64,7 +64,17 @@ input, select {
   padding: 8px 12px;
   outline: none;
 }
-select { padding-right: 30px; } /* breathing room before the native dropdown arrow */
+/* Native select chrome reserves its own wide fixed area for the arrow — no amount of
+   padding closes that gap, since the arrow lives inside that reserved space, not next to
+   the text. Strip it and draw a small arrow tight against the text instead. */
+select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  padding-right: 26px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238b909c' stroke-width='2'%3E%3Cpath d='M5 7l5 5 5-5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+}
 input:focus, select:focus { border-color: var(--accent); }
 
 /* ---------- Login ---------- */
@@ -192,12 +202,12 @@ input:focus, select:focus { border-color: var(--accent); }
 .btn-ghost:hover { background: var(--border); }
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 .btn-danger:hover { background: var(--danger); color: white; }
-.move-select { padding: 8px 10px; }
+.move-select { padding: 8px 26px 8px 10px; }
 .attribution { font-size: 12px; color: var(--muted); padding: 0 24px 18px; }
 
 /* ---------- Toolbar additions ---------- */
 .add-item-btn { background: var(--accent); white-space: nowrap; }
-#sort-select { padding: 7px 10px; }
+#sort-select { padding: 7px 26px 7px 10px; }
 .all-lists { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; }
 .all-lists input { accent-color: var(--accent); }
 
