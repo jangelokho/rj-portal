@@ -235,6 +235,9 @@ input:focus, select:focus { border-color: var(--accent); }
 
 /* ---------- Modal upload row ---------- */
 .upload-row { display: flex; align-items: center; gap: 10px; margin: 12px 0; font-size: 13px; color: var(--muted); }
+/* A <label> doesn't get the base button{} tag rule for free — matches it explicitly so
+   this reads identically to every other button instead of the old one-off inline style. */
+.upload-label { display: inline-flex; align-items: center; cursor: pointer; font: inherit; padding: 8px 14px; border-radius: 4px; }
 
 /* ---------- Toasts ---------- */
 .toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -253,7 +256,10 @@ input:focus, select:focus { border-color: var(--accent); }
 .card-star.faved { color: #f59e0b; }
 
 /* ---------- Modal editable fields ---------- */
-.modal-edit-title { width: 100%; font-family: var(--font-display); font-size: 22px; font-weight: 500; background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text); padding: 2px 0; }
+/* Leaves room on the right for the close button, which sits above this row —
+   without it, the title's background would run underneath the close button. */
+.modal-title-row { display: flex; align-items: center; gap: 8px; padding-right: 40px; }
+.modal-edit-title { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 22px; font-weight: 500; background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text); padding: 2px 0; }
 .modal-edit-title:hover { border-bottom-color: var(--border); }
 .modal-edit-title:focus { border-bottom-color: var(--accent); outline: none; }
 .modal-edit-note { width: 100%; resize: vertical; font-family: inherit; font-size: 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin-top: 8px; }
@@ -262,9 +268,9 @@ input:focus, select:focus { border-color: var(--accent); }
 .star-rating { display: flex; gap: 2px; }
 .star-rating .star-btn { background: transparent; border: none; padding: 0 1px; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
 .star-rating .star-btn:hover { color: #f59e0b; }
-.modal-edit-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.modal-star { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; border-radius: 4px; }
-.modal-star.faved { color: #f59e0b; border-color: #f59e0b; }
+.modal-star { background: transparent; border: none; padding: 0 2px; font-size: 22px; line-height: 1; color: var(--muted); flex-shrink: 0; }
+.modal-star:hover { background: transparent; color: #f59e0b; }
+.modal-star.faved { color: #f59e0b; }
 #modal-save-edit:disabled { opacity: 0.5; cursor: default; }
 
 /* ============================================================

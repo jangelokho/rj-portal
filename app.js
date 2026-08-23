@@ -599,7 +599,10 @@ function openModal(item) {
   $("#modal-body").innerHTML = `
     ${hero}
     <div class="modal-content">
-      <input class="modal-edit-title" id="modal-edit-title" value="${esc(item.title || item.raw_text || "")}" placeholder="Title" />
+      <div class="modal-title-row">
+        <input class="modal-edit-title" id="modal-edit-title" value="${esc(item.title || item.raw_text || "")}" placeholder="Title" />
+        <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star" title="Favorite">${isFav(item) ? "★" : "☆"}</button>
+      </div>
       ${item.url ? `<p>${link(item.url, "Open original")}</p>` : ""}
       <div class="modal-fields">${fields}</div>
       <textarea class="modal-edit-note" id="modal-edit-note" rows="2" placeholder="${isVisitKind ? "What did you think? Notes on your visit…" : "Add a note…"}">${esc(item.description || "")}</textarea>
@@ -609,13 +612,8 @@ function openModal(item) {
         <label for="modal-edit-date">Date</label>
         <input type="date" class="modal-edit-date" id="modal-edit-date" value="${esc(item.due_date || "")}" />
       </div>
-      <div class="modal-edit-row">
-        <button class="modal-star ${isFav(item) ? "faved" : ""}" id="modal-star">${isFav(item) ? "★ Starred" : "☆ Star"}</button>
-        <button id="modal-save-edit" disabled>Save</button>
-        <span id="modal-edit-msg" class="muted"></span>
-      </div>
       <div class="upload-row">
-        <label class="btn-ghost" style="cursor:pointer;padding:6px 12px;border-radius:8px;">
+        <label class="btn-ghost upload-label">
           ${item.image ? "Replace photo" : (isVisitKind ? "Add a photo from your visit" : "Upload image")}
           <input type="file" id="modal-upload" accept="image/*" style="display:none">
         </label>
@@ -629,9 +627,10 @@ function openModal(item) {
     <div class="modal-actions">
       <button class="btn-ghost" id="act-done">${isDone ? "Mark active" : "Mark done"}</button>
       <button class="btn-ghost" id="act-archive">${isArchived ? "Unarchive" : "Archive"}</button>
+      <button class="btn-danger" id="act-delete">Delete</button>
       <select class="move-select" id="act-move">${moveOptions}</select>
       <span class="spacer"></span>
-      <button class="btn-danger" id="act-delete">Delete</button>
+      <button id="modal-save-edit" disabled>Save</button>
     </div>`;
 
   $("#act-done").onclick = () => applyPatch(item, { status: isDone ? "active" : "done" }, isDone ? "Marked active" : "Marked done");
