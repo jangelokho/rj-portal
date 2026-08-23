@@ -116,7 +116,7 @@ async function uploadImage(file) {
 
 // ---------- Auth ----------
 function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); }
-function showApp() { $("#login").classList.add("hidden"); $("#app").classList.remove("hidden"); init(); }
+function showApp() { $("#login").classList.add("hidden"); $("#app").classList.remove("hidden"); init().then(applyMode); }
 
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -867,6 +867,244 @@ function fmtDueDate(s) {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 function todayIso() { return new Date().toLocaleDateString("en-CA"); } // en-CA gives YYYY-MM-DD
+
+// ---------- Finances ("Bigger RJ Portal"'s second top-level mode) ----------
+const MODE_KEY = "rj_mode"; // 'list' | 'finance'
+state.mode = localStorage.getItem(MODE_KEY) === "finance" ? "finance" : "list";
+state.finSearch = "";
+state.finCategory = "all";
+state.finMonth = "all";
+
+const FIN_CATEGORY_ORDER = [
+  "Food", "Groceries/Supplies", "Transportation", "Shopping",
+  "Rent", "Entertainment", "Medicine/Health", "Other",
+];
+const FIN_CATEGORY_COLOR = {
+  "Food": "--fin-c-food",
+  "Groceries/Supplies": "--fin-c-groceries",
+  "Transportation": "--fin-c-transport",
+  "Shopping": "--fin-c-shopping",
+  "Rent": "--fin-c-rent",
+  "Entertainment": "--fin-c-entertainment",
+  "Medicine/Health": "--fin-c-medicine",
+  "Other": "--fin-c-other",
+};
+
+function applyMode() {
+  document.body.classList.toggle("mode-finance", state.mode === "finance");
+  $$("#mode-switch .mode-btn").forEach((b) => b.classList.toggle("selected", b.dataset.mode === state.mode));
+  if (state.mode === "finance") renderFinance(); else renderMain();
+}
+$$("#mode-switch .mode-btn").forEach((b) => {
+  b.addEventListener("click", () => {
+    if (b.dataset.mode === state.mode) return;
+    state.mode = b.dataset.mode;
+    localStorage.setItem(MODE_KEY, state.mode);
+    applyMode();
+  });
+});
+
+function finRows() {
+  return (window.FINANCE_TXNS || []).map(([date, item, category, sgd]) => ({ date, item, category, sgd }));
+}
+function finFmtSGD(n) {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}S$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function finFmtPHP(n) {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}₱${Math.abs(n * (window.FX_RATE || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function finFmtMonth(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+function finFmtMonthShort(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short" });
+}
+function finFmtDate(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function finAggregate(rows) {
+  const byCategory = {}, byMonth = {};
+  let total = 0, minDate = null, maxDate = null;
+  for (const r of rows) {
+    total += r.sgd;
+    byCategory[r.category] = (byCategory[r.category] || 0) + r.sgd;
+    const ym = r.date.slice(0, 7);
+    byMonth[ym] = (byMonth[ym] || 0) + r.sgd;
+    if (!minDate || r.date < minDate) minDate = r.date;
+    if (!maxDate || r.date > maxDate) maxDate = r.date;
+  }
+  return { total, byCategory, byMonth, minDate, maxDate };
+}
+
+function finCategoryChart(byCategory, total) {
+  const entries = FIN_CATEGORY_ORDER
+    .map((cat) => ({ cat, value: byCategory[cat] || 0 }))
+    .filter((e) => e.value !== 0)
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  if (!entries.length) return `<div class="fin-empty">No category data.</div>`;
+  const max = Math.max(1, ...entries.map((e) => Math.abs(e.value)));
+  return `<div class="fin-hbar-chart">${entries.map((e) => {
+    const pct = total ? (e.value / total) * 100 : 0;
+    const w = Math.max(2, (Math.abs(e.value) / max) * 100);
+    const colorVar = FIN_CATEGORY_COLOR[e.cat] || "--fin-c-other";
+    return `
+      <div class="fin-hbar-row" title="${esc(e.cat)}: ${esc(finFmtSGD(e.value))} (${pct.toFixed(1)}%)">
+        <span class="fin-hbar-label"><span class="fin-cat-swatch" style="background:var(${colorVar})"></span>${esc(e.cat)}</span>
+        <div class="fin-hbar-track"><div class="fin-hbar-fill" style="width:${w}%;background:var(${colorVar})"></div></div>
+        <span class="fin-hbar-value">${esc(finFmtSGD(e.value))}</span>
+      </div>`;
+  }).join("")}</div>`;
+}
+
+function finMonthlyChart(byMonth) {
+  const months = Object.keys(byMonth).sort();
+  if (!months.length) return `<div class="fin-empty">No monthly data.</div>`;
+  const max = Math.max(1, ...months.map((m) => Math.abs(byMonth[m])));
+  return `<div class="fin-vbar-chart">${months.map((m) => {
+    const v = byMonth[m];
+    const h = Math.max(2, (Math.abs(v) / max) * 100);
+    return `
+      <div class="fin-vbar-col" title="${esc(finFmtMonth(m))}: ${esc(finFmtSGD(v))}">
+        <div class="fin-vbar-value">${finFmtSGD(v).replace("S$", "")}</div>
+        <div class="fin-vbar-track"><div class="fin-vbar-fill" style="height:${h}%"></div></div>
+        <div class="fin-vbar-label">${esc(finFmtMonthShort(m))}</div>
+      </div>`;
+  }).join("")}</div>`;
+}
+
+function finCategorySummaryTable(byCategory, total) {
+  const entries = FIN_CATEGORY_ORDER
+    .map((cat) => ({ cat, value: byCategory[cat] || 0 }))
+    .filter((e) => e.value !== 0)
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  return `
+    <table class="fin-summary-table">
+      <thead><tr><th>Category</th><th>SGD</th><th>PHP</th><th>%</th></tr></thead>
+      <tbody>${entries.map((e) => `
+        <tr>
+          <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[e.cat] || "--fin-c-other"})"></span>${esc(e.cat)}</span></td>
+          <td class="fin-num">${esc(finFmtSGD(e.value))}</td>
+          <td class="fin-num">${esc(finFmtPHP(e.value))}</td>
+          <td class="fin-num">${(total ? (e.value / total) * 100 : 0).toFixed(1)}%</td>
+        </tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total</td><td class="fin-num">${esc(finFmtSGD(total))}</td><td class="fin-num">${esc(finFmtPHP(total))}</td><td class="fin-num">100%</td></tr></tfoot>
+    </table>`;
+}
+
+function finMonthlySummaryTable(byMonth, total) {
+  const months = Object.keys(byMonth).sort();
+  return `
+    <table class="fin-summary-table">
+      <thead><tr><th>Month</th><th>SGD</th><th>PHP</th></tr></thead>
+      <tbody>${months.map((m) => `
+        <tr>
+          <td>${esc(finFmtMonth(m))}</td>
+          <td class="fin-num">${esc(finFmtSGD(byMonth[m]))}</td>
+          <td class="fin-num">${esc(finFmtPHP(byMonth[m]))}</td>
+        </tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total</td><td class="fin-num">${esc(finFmtSGD(total))}</td><td class="fin-num">${esc(finFmtPHP(total))}</td></tr></tfoot>
+    </table>`;
+}
+
+function finFilteredRows() {
+  const q = state.finSearch.trim().toLowerCase();
+  const all = finRows();
+  return all.filter((r) => {
+    if (state.finCategory !== "all" && r.category !== state.finCategory) return false;
+    if (state.finMonth !== "all" && r.date.slice(0, 7) !== state.finMonth) return false;
+    if (q && !r.item.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function finTransactionTable(rows) {
+  if (!rows.length) return `<div class="fin-empty">No transactions match this filter.</div>`;
+  const sorted = [...rows].sort((a, b) => b.date < a.date ? -1 : b.date > a.date ? 1 : 0);
+  return `
+    <div class="fin-scroll">
+      <table class="fin-table">
+        <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th></tr></thead>
+        <tbody>${sorted.map((r) => `
+          <tr>
+            <td>${esc(finFmtDate(r.date))}</td>
+            <td>${esc(r.item)}</td>
+            <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
+            <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderFinance() {
+  const all = finRows();
+  const agg = finAggregate(all);
+  const filtered = finFilteredRows();
+  const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
+  const months = Object.keys(agg.byMonth).sort();
+  const rangeLabel = agg.minDate && agg.maxDate ? `${finFmtDate(agg.minDate)} – ${finFmtDate(agg.maxDate)}` : "";
+
+  const monthOptions = months.map((m) => `<option value="${m}" ${state.finMonth === m ? "selected" : ""}>${esc(finFmtMonth(m))}</option>`).join("");
+  const categoryOptions = FIN_CATEGORY_ORDER.filter((c) => agg.byCategory[c])
+    .map((c) => `<option value="${c}" ${state.finCategory === c ? "selected" : ""}>${esc(c)}</option>`).join("");
+
+  $("#finance-view").innerHTML = `
+    <div class="fin-head">
+      <h2>Finances — Singapore</h2>
+      <p>${esc(rangeLabel)} · Citibank credit card + DBS/POSB account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
+    </div>
+    <div class="fin-kpis">
+      <div class="fin-kpi"><div class="fin-kpi-label">Total spend</div><div class="fin-kpi-value">${esc(finFmtSGD(agg.total))}</div><div class="fin-kpi-sub">${esc(finFmtPHP(agg.total))}</div></div>
+      <div class="fin-kpi"><div class="fin-kpi-label">Transactions</div><div class="fin-kpi-value">${all.length}</div><div class="fin-kpi-sub">${months.length} months</div></div>
+      <div class="fin-kpi"><div class="fin-kpi-label">Avg / month</div><div class="fin-kpi-value">${esc(finFmtSGD(months.length ? agg.total / months.length : 0))}</div><div class="fin-kpi-sub">${esc(finFmtPHP(months.length ? agg.total / months.length : 0))}</div></div>
+      <div class="fin-kpi"><div class="fin-kpi-label">Filtered view</div><div class="fin-kpi-value">${esc(finFmtSGD(filteredTotal))}</div><div class="fin-kpi-sub">${filtered.length} rows</div></div>
+    </div>
+    <div class="fin-grid">
+      <div class="fin-table-wrap">
+        <div class="fin-toolbar">
+          <input id="fin-search" type="search" placeholder="Search item…" value="${esc(state.finSearch)}" />
+          <select id="fin-category-filter">
+            <option value="all">All categories</option>
+            ${categoryOptions}
+          </select>
+          <select id="fin-month-filter">
+            <option value="all">All months</option>
+            ${monthOptions}
+          </select>
+        </div>
+        ${finTransactionTable(filtered)}
+      </div>
+      <div class="fin-side">
+        <div class="fin-card">
+          <h3>Category breakdown</h3>
+          ${finCategoryChart(agg.byCategory, agg.total)}
+          ${finCategorySummaryTable(agg.byCategory, agg.total)}
+        </div>
+        <div class="fin-card">
+          <h3>Monthly breakdown</h3>
+          ${finMonthlyChart(agg.byMonth)}
+          ${finMonthlySummaryTable(agg.byMonth, agg.total)}
+        </div>
+      </div>
+    </div>`;
+
+  $("#fin-search").addEventListener("input", (e) => {
+    state.finSearch = e.target.value;
+    renderFinance();
+    // Full re-render replaces the input node, so the caret would otherwise jump
+    // out of the field after every keystroke — put it back at the end.
+    const el = $("#fin-search");
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  });
+  $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
+  $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
+}
 
 // ---------- boot ----------
 if (pw()) showApp(); else showLogin();

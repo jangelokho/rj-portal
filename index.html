@@ -47,6 +47,10 @@
   <div id="app" class="app hidden">
     <aside class="sidebar">
       <div class="brand">RJ&nbsp;Portal</div>
+      <div id="mode-switch" class="mode-switch">
+        <button class="mode-btn selected" data-mode="list">The List</button>
+        <button class="mode-btn" data-mode="finance">Finances</button>
+      </div>
       <nav id="list-nav" class="list-nav"></nav>
       <button id="new-list-btn" class="new-list-btn">+ New list</button>
       <button id="theme-btn" class="theme-btn" title="Switch theme" aria-label="Switch theme">
@@ -98,6 +102,7 @@
       </header>
       <section id="cards" class="cards"></section>
       <div id="empty" class="empty hidden"></div>
+      <section id="finance-view" class="finance-view"></section>
     </main>
   </div>
 
@@ -157,6 +162,7 @@
   <!-- Toasts -->
   <div id="toasts" class="toasts"></div>
 
+  <script src="/finance-data.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

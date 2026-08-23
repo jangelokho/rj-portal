@@ -373,6 +373,8 @@ body {
   }
   .sidebar::-webkit-scrollbar { display: none; }
   .brand { display: none; }
+  .mode-switch { flex: 0 0 auto; width: auto; padding: 0; gap: 6px; }
+  .mode-btn { flex: 0 0 auto; white-space: nowrap; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
   .list-nav {
     flex: 0 0 auto; flex-direction: row; gap: 6px;
     overflow: visible;
@@ -476,6 +478,134 @@ body {
 :root[data-theme="light"] input,
 :root[data-theme="light"] select,
 :root[data-theme="light"] textarea { background-color: var(--bg); } /* -color, not the shorthand — select's arrow background-image must survive this */
+
+/* ============================================================
+   FINANCES — "Bigger RJ Portal"'s second top-level mode, alongside The List.
+   Categorical series order is fixed (never cycled) per category, so a filter
+   that changes which categories are visible never repaints the survivors.
+   Dark values here are the base (this file's convention); the light block
+   below swaps to the validated light-surface steps.
+   ============================================================ */
+:root {
+  --fin-surface: #1a1a19;
+  --fin-ink: #ffffff;
+  --fin-ink-2: #c3c2b7;
+  --fin-muted: #898781;
+  --fin-grid: #2c2c2a;
+  --fin-c-food: #3987e5;       /* blue */
+  --fin-c-groceries: #d95926;  /* orange */
+  --fin-c-transport: #199e70;  /* aqua */
+  --fin-c-shopping: #c98500;   /* yellow */
+  --fin-c-rent: #d55181;       /* magenta */
+  --fin-c-entertainment: #008300; /* green */
+  --fin-c-medicine: #9085e9;   /* violet */
+  --fin-c-other: #e66767;      /* red */
+}
+:root[data-theme="light"] {
+  --fin-surface: #fcfcfb;
+  --fin-ink: #0b0b0b;
+  --fin-ink-2: #52514e;
+  --fin-muted: #898781;
+  --fin-grid: #e1e0d9;
+  --fin-c-food: #2a78d6;
+  --fin-c-groceries: #eb6834;
+  --fin-c-transport: #1baf7a;
+  --fin-c-shopping: #eda100;
+  --fin-c-rent: #e87ba4;
+  --fin-c-entertainment: #008300;
+  --fin-c-medicine: #4a3aa7;
+  --fin-c-other: #e34948;
+}
+
+.mode-switch { display: flex; gap: 4px; padding: 0 2px 14px; }
+.mode-btn {
+  flex: 1; background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 7px 8px; font-size: 12px; border-radius: 6px; white-space: nowrap;
+}
+.mode-btn:hover { background: var(--bg-card); color: var(--text); }
+.mode-btn.selected { background: var(--bg-card); color: var(--text); border-color: var(--list-accent); }
+
+/* Whichever mode is active hides the other side's chrome entirely, rather than
+   each render function reaching across to toggle the other's elements. */
+body.mode-finance .list-nav,
+body.mode-finance #new-list-btn,
+body.mode-finance .main-head,
+body.mode-finance #cards,
+body.mode-finance #empty { display: none; }
+body:not(.mode-finance) .finance-view { display: none; }
+body.mode-finance .finance-view { display: block; }
+
+.finance-view { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.fin-head { margin-bottom: 18px; }
+.fin-head h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 500; }
+.fin-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+.fin-kpis { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.fin-kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; flex: 1; min-width: 150px; }
+.fin-kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.fin-kpi-value { font-size: 21px; font-weight: 500; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.fin-kpi-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+.fin-grid { display: flex; gap: 20px; align-items: flex-start; }
+.fin-table-wrap { flex: 1.6; min-width: 0; }
+.fin-side { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 16px; }
+.fin-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.fin-card h3 { margin: 0 0 12px; font-size: 14px; font-weight: 500; }
+
+.fin-toolbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.fin-toolbar select, .fin-toolbar input { padding: 7px 26px 7px 10px; font-size: 13px; }
+.fin-toolbar input[type="search"] { flex: 1; min-width: 140px; padding-right: 10px; }
+
+.fin-scroll { max-height: calc(100vh - 300px); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.fin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fin-table th {
+  text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em;
+  padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-elev);
+}
+.fin-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.fin-table tbody tr:hover { background: var(--bg-card-alt); }
+.fin-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fin-cat-swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+.fin-cat-name { display: inline-flex; align-items: center; }
+
+.fin-summary-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+.fin-summary-table th { text-align: right; font-size: 11px; color: var(--muted); font-weight: 400; padding: 4px 6px; }
+.fin-summary-table th:first-child { text-align: left; }
+.fin-summary-table td { padding: 5px 6px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.fin-summary-table td:first-child { text-align: left; }
+.fin-summary-table td.fin-num { text-align: right; }
+.fin-summary-table tfoot td { border-top: 1px solid var(--list-accent); font-weight: 500; }
+
+/* Category breakdown — horizontal bars (HTML/CSS, not SVG: font sizing inside a
+   viewBox-scaled SVG drifts with container width, plain flex/grid doesn't). */
+.fin-hbar-chart { display: flex; flex-direction: column; gap: 10px; }
+.fin-hbar-row { display: grid; grid-template-columns: 116px 1fr 90px; align-items: center; gap: 10px; cursor: default; }
+.fin-hbar-label { font-size: 12px; color: var(--text); display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin-hbar-track { height: 14px; background: var(--fin-grid); border-radius: 4px; overflow: hidden; }
+.fin-hbar-fill { height: 100%; border-radius: 4px; min-width: 3px; transition: opacity .1s ease; }
+.fin-hbar-row:hover .fin-hbar-fill { opacity: .85; }
+.fin-hbar-value { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+
+/* Monthly breakdown — vertical columns, single hue (a trend, not an identity). */
+.fin-vbar-chart { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding-top: 22px; }
+.fin-vbar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; min-width: 0; cursor: default; }
+.fin-vbar-value { font-size: 10px; color: var(--muted); margin-bottom: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin-vbar-track { width: 100%; max-width: 36px; flex: 1; background: var(--fin-grid); border-radius: 4px 4px 2px 2px; display: flex; align-items: flex-end; overflow: hidden; }
+.fin-vbar-fill { width: 100%; background: var(--fin-c-food); border-radius: 4px 4px 0 0; min-height: 3px; transition: opacity .1s ease; }
+.fin-vbar-col:hover .fin-vbar-fill { opacity: .85; }
+.fin-vbar-label { font-size: 10px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
+
+.fin-empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+
+@media (max-width: 1024px) {
+  .fin-grid { flex-direction: column; }
+  .fin-side { min-width: 0; }
+  .fin-scroll { max-height: 420px; }
+}
+@media (max-width: 768px) {
+  .finance-view { padding: 14px; }
+  .fin-kpi { min-width: 130px; }
+}
 
 /* Theme switch — matches the sidebar's ghost buttons. */
 .theme-btn {
