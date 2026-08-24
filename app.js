@@ -1219,6 +1219,7 @@ function finIncomeExpenseTab() {
 
 // ---------- Consolidate: reconcile the statement-derived data against Ria's manual log ----------
 state.finTab = "overview"; // 'overview' | 'income' | 'consolidate'
+state.finConsolidatePerson = "ria"; // 'ria' | 'jangelo' — which statements to reconcile against
 state.finShowInsights = true;
 
 // Rounded-up Citibank card payments, found as "BILL CCC" lines in the DBS history —
@@ -1514,6 +1515,99 @@ function finReconcile() {
   return { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups, enrichMap };
 }
 
+// ---------- Jangelo's statements (Wise SGD account) — same core tiers as Ria's
+// reconciliation above, scoped to only his own manual-log entries. Simpler: no CC
+// bill payments, excluded transfers, or consolidated-day groups yet — add those
+// the same way as Ria's if he reports a case like the "pop toy art stuff" one.
+function finJangeloRows() {
+  return (window.JANGELO_TXNS || []).map(([date, item, category, sgd], idx) => ({ date, item, category, sgd, idx }));
+}
+function finReconcileJangelo() {
+  const statementRows = finJangeloRows();
+  const manual = finManualRows().filter((m) => /jangelo/i.test(m.status));
+  const usedStatement = new Set();
+  const usedManual = new Set();
+  const matched = [];
+
+  function tryMatch(maxDays) {
+    for (const m of manual) {
+      if (usedManual.has(m.idx)) continue;
+      const candidates = [];
+      for (let i = 0; i < statementRows.length; i++) {
+        if (usedStatement.has(i)) continue;
+        const s = statementRows[i];
+        if (Math.abs(s.sgd - m.cost) > 0.01) continue;
+        const dd = finDaysApart(s.date, m.date);
+        if (dd > maxDays) continue;
+        candidates.push({ i, dd });
+      }
+      candidates.sort((a, b) => a.dd - b.dd);
+      for (const c of candidates) {
+        const key = `jsm|${c.i}|${m.idx}`;
+        if (state.finDismissed.has(key)) continue;
+        usedStatement.add(c.i); usedManual.add(m.idx);
+        matched.push({ manual: m, statement: statementRows[c.i], daysApart: c.dd, key });
+        break;
+      }
+    }
+  }
+  tryMatch(0);
+  tryMatch(4);
+
+  const possibleMatches = [];
+  for (const s of statementRows) {
+    if (usedStatement.has(s.idx)) continue;
+    let best = null, bestDist = Infinity;
+    for (const m of manual) {
+      if (usedManual.has(m.idx)) continue;
+      if (Math.abs(m.cost - s.sgd) > 0.01) continue;
+      const dd = finDaysApart(m.date, s.date);
+      if (dd > 14) continue;
+      if (dd > 4 && !finSharesToken(s.item, m.item)) continue;
+      if (dd < bestDist) { bestDist = dd; best = m; }
+    }
+    if (best) {
+      const key = `jpm|${s.idx}|${best.idx}`;
+      if (state.finConfirmed.has(key)) {
+        usedStatement.add(s.idx); usedManual.add(best.idx);
+        matched.push({ manual: best, statement: s, daysApart: bestDist, key });
+      } else if (!state.finDismissed.has(key)) {
+        possibleMatches.push({ manual: best, statement: s, daysApart: bestDist, key });
+      }
+    }
+  }
+
+  const nearAmountUsedManual = new Set();
+  const possibleMatchesNearAmount = [];
+  for (const s of statementRows) {
+    if (usedStatement.has(s.idx)) continue;
+    let best = null, bestScore = Infinity;
+    for (const m of manual) {
+      if (usedManual.has(m.idx) || nearAmountUsedManual.has(m.idx)) continue;
+      const dd = finDaysApart(m.date, s.date);
+      if (dd > 1) continue;
+      const delta = Math.abs(m.cost - s.sgd);
+      if (delta < 0.01 || delta > 0.5) continue;
+      const score = delta * 10 + dd;
+      if (score < bestScore) { bestScore = score; best = m; }
+    }
+    if (best) {
+      const key = `jpmn|${s.idx}|${best.idx}`;
+      if (state.finConfirmed.has(key)) {
+        usedStatement.add(s.idx); usedManual.add(best.idx);
+        matched.push({ manual: best, statement: s, daysApart: finDaysApart(best.date, s.date), key });
+      } else if (!state.finDismissed.has(key)) {
+        nearAmountUsedManual.add(best.idx);
+        possibleMatchesNearAmount.push({ manual: best, statement: s, delta: Math.abs(best.cost - s.sgd), key });
+      }
+    }
+  }
+
+  const manualOnly = manual.filter((m) => !usedManual.has(m.idx));
+  const statementOnly = statementRows.filter((s) => !usedStatement.has(s.idx));
+  return { matched, manualOnly, statementOnly, possibleMatches, possibleMatchesNearAmount };
+}
+
 function finConsolidatePanel(reconcile) {
   const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups } = reconcile;
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
@@ -1682,6 +1776,98 @@ function finConsolidatePanel(reconcile) {
     </div>`;
 }
 
+function finConsolidatePanelJangelo(reconcile) {
+  const { matched, manualOnly, statementOnly, possibleMatches, possibleMatchesNearAmount } = reconcile;
+  const sortedStatementOnly = [...statementOnly].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const sortedMatched = [...matched].sort((a, b) => a.manual.date < b.manual.date ? -1 : a.manual.date > b.manual.date ? 1 : 0);
+
+  return `
+    <div class="fin-card">
+      <h3>Consolidate with Jangelo's manual log entries</h3>
+      <p class="fin-consolidate-note">Matches his Wise SGD statements (Apr 1 – Aug 24) against the "Paid by Jangelo" rows in your manual log. Same tiers as your own reconciliation — nothing here counts toward your Finances totals, this is just matching his log to his statements.</p>
+      <div class="fin-kpis">
+        <div class="fin-kpi"><div class="fin-kpi-label">Matched</div><div class="fin-kpi-value">${matched.length}</div><div class="fin-kpi-sub">same purchase, already logged</div></div>
+        <div class="fin-kpi"><div class="fin-kpi-label">Missing from his log</div><div class="fin-kpi-value">${statementOnly.length}</div><div class="fin-kpi-sub">on his statements, not logged yet</div></div>
+        <div class="fin-kpi"><div class="fin-kpi-label">Only in his log</div><div class="fin-kpi-value">${manualOnly.length}</div><div class="fin-kpi-sub">not on his Wise statements</div></div>
+      </div>
+      ${possibleMatches.length ? `
+      <div class="fin-review-section" data-section="jpm">
+        <div class="fin-card-head">
+          <h4 class="fin-sub-h">Possible matches to review (${possibleMatches.length})</h4>
+          <button class="btn-ghost fin-consolidate-all">Consolidate all shown</button>
+        </div>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>Statement</th><th>His log</th><th class="fin-num">Cost</th><th>Gap</th><th></th></tr></thead>
+            <tbody>${possibleMatches.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
+                <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
+                <td>${p.daysApart}d</td>
+                <td class="fin-review-actions">
+                  <button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button>
+                  <button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button>
+                </td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
+      ${possibleMatchesNearAmount.length ? `
+      <div class="fin-review-section" data-section="jpmn">
+        <div class="fin-card-head">
+          <h4 class="fin-sub-h">Possible matches — close in price (${possibleMatchesNearAmount.length})</h4>
+          <button class="btn-ghost fin-consolidate-all">Consolidate all shown</button>
+        </div>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>Statement</th><th>His log</th><th class="fin-num">Statement cost</th><th class="fin-num">His log cost</th><th></th></tr></thead>
+            <tbody>${possibleMatchesNearAmount.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
+                <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
+                <td class="fin-num">${esc(finFmtSGD(p.manual.cost))}</td>
+                <td class="fin-review-actions">
+                  <button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button>
+                  <button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button>
+                </td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
+      <h4 class="fin-sub-h">Missing from his log (${statementOnly.length})</h4>
+      <div class="fin-scroll" style="max-height:320px;">
+        <table class="fin-table">
+          <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th></tr></thead>
+          <tbody>${sortedStatementOnly.map((r) => `
+            <tr>
+              <td>${esc(finFmtDate(r.date))}</td>
+              <td>${esc(r.item)}</td>
+              <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
+              <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>
+      <details class="fin-details">
+        <summary>Matched pairs (${matched.length}) — same purchase, logged once</summary>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>His log</th><th>Statement</th><th class="fin-num">Cost</th><th>Gap</th><th></th></tr></thead>
+            <tbody>${sortedMatched.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
+                <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
+                <td>${p.daysApart === 0 ? "same day" : `${p.daysApart}d`}</td>
+                <td class="fin-review-actions"><button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button></td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </details>
+    </div>`;
+}
+
 function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
   const monthOptions = months.map((m) => `<option value="${m}" ${state.finMonth === m ? "selected" : ""}>${esc(finFmtMonth(m))}</option>`).join("");
   const categoryOptions = FIN_CATEGORY_ORDER.filter((c) => agg.byCategory[c])
@@ -1745,10 +1931,19 @@ function renderFinance() {
   const rangeLabel = agg.minDate && agg.maxDate ? `${finFmtDate(agg.minDate)} – ${finFmtDate(agg.maxDate)}` : "";
 
   const hasManual = !!window.MANUAL_TXNS;
+  const hasJangelo = !!window.JANGELO_TXNS;
   if (state.finTab === "consolidate" && !hasManual) state.finTab = "overview";
   const reconcile = hasManual ? finReconcile() : null;
+  const consolidateContent = state.finConsolidatePerson === "jangelo" && hasJangelo
+    ? finConsolidatePanelJangelo(finReconcileJangelo())
+    : finConsolidatePanel(reconcile);
+  const consolidateToggle = hasJangelo ? `
+    <div class="fin-tabs" style="margin-bottom:16px;">
+      <button class="fin-tab-btn fin-person-btn ${state.finConsolidatePerson !== "jangelo" ? "selected" : ""}" data-person="ria">Ria's statements</button>
+      <button class="fin-tab-btn fin-person-btn ${state.finConsolidatePerson === "jangelo" ? "selected" : ""}" data-person="jangelo">Jangelo's statements</button>
+    </div>` : "";
   const tabContent = state.finTab === "income" ? finIncomeExpenseTab()
-    : state.finTab === "consolidate" ? finConsolidatePanel(reconcile)
+    : state.finTab === "consolidate" ? consolidateToggle + consolidateContent
     : finOverviewTab(all, agg, filtered, filteredTotal, months, reconcile && reconcile.enrichMap);
 
   $("#finance-view").innerHTML = `
@@ -1763,9 +1958,14 @@ function renderFinance() {
     </div>
     ${tabContent}`;
 
-  $$("#finance-view .fin-tab-btn").forEach((b) => b.addEventListener("click", () => {
+  $$("#finance-view .fin-tab-btn[data-tab]").forEach((b) => b.addEventListener("click", () => {
     if (b.dataset.tab === state.finTab) return;
     state.finTab = b.dataset.tab;
+    renderFinance();
+  }));
+  $$("#finance-view .fin-person-btn[data-person]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.person === state.finConsolidatePerson) return;
+    state.finConsolidatePerson = b.dataset.person;
     renderFinance();
   }));
 
