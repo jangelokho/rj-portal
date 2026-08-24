@@ -1283,6 +1283,16 @@ const CONSOLIDATED_GROUPS = [
   },
 ];
 
+// 1:1 pairs Ria confirmed directly, where the amount gap is bigger than the
+// near-amount tier allows (>50 cents) so the matcher would never surface them on
+// its own. Treated as certain, same as a strict match — not put in a review list.
+const CONFIRMED_PAIRS = [
+  {
+    statementDate: "2026-08-01", statementItem: "Tiong Bahru Bakery", statementSgd: 16.79,
+    manualDate: "2026-08-01", manualItem: "tiong bahru bakery",
+  },
+];
+
 function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
 function finManualRows() {
   return (window.MANUAL_TXNS || []).map(([date, item, category, cost, status], idx) => ({ date, item, category, cost, status, idx }));
@@ -1427,6 +1437,17 @@ function finReconcile() {
     const manualRow = manual.find((m) => m.date === g.manualDate && m.item === g.manualItem);
     if (manualRow) usedManual.add(manualRow.idx);
     consolidatedGroups.push({ ...g, rows, sum, manualRow, ok: Math.abs(sum - g.manualCost) < 0.01 });
+  }
+
+  // Confirmed 1:1 pairs (see CONFIRMED_PAIRS) — Ria confirmed these by hand, so treat
+  // as certain matches rather than surfacing them through the amount-tolerance tiers.
+  for (const p of CONFIRMED_PAIRS) {
+    const s = statementRows.find((r) => r.date === p.statementDate && r.item === p.statementItem && Math.abs(r.sgd - p.statementSgd) < 0.01 && !usedStatement.has(r.idx));
+    const m = manual.find((r) => r.date === p.manualDate && r.item.toLowerCase() === p.manualItem.toLowerCase() && !usedManual.has(r.idx));
+    if (s && m) {
+      usedStatement.add(s.idx); usedManual.add(m.idx);
+      matched.push({ manual: m, statement: s, daysApart: finDaysApart(s.date, m.date), key: `cp|${s.idx}|${m.idx}` });
+    }
   }
 
   // Possible matches: still-unmatched pairs with the SAME exact amount, either
