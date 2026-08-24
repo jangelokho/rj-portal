@@ -1256,8 +1256,12 @@ function finIncomeRows() {
 }
 
 function finIncomeExpenseTab() {
+  // Deliberately Ria's own statement only (not the household total) — income here
+  // is only ever her own salary, so netting it against Jangelo's Wise spend too
+  // would subtract money that never touched her DBS account in the first place,
+  // making "Net" meaningless against her actual bank balance.
   const income = finIncomeRows();
-  const expenses = finHouseholdRows();
+  const expenses = finRows();
   const months = [...new Set([...income.map((r) => r.date.slice(0, 7)), ...expenses.map((r) => r.date.slice(0, 7))])].sort();
   const incomeByMonth = {}, expenseByMonth = {};
   for (const r of income) incomeByMonth[r.date.slice(0, 7)] = (incomeByMonth[r.date.slice(0, 7)] || 0) + r.sgd;
