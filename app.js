@@ -1369,7 +1369,7 @@ function finReconcile() {
       if (usedManual.has(m.idx)) continue;
       if (Math.abs(m.cost - s.sgd) > 0.01) continue;
       const dd = finDaysApart(m.date, s.date);
-      if (dd > 10) continue;
+      if (dd > 14) continue;
       if (dd > 4 && !finSharesToken(s.item, m.item)) continue;
       if (dd < bestDist) { bestDist = dd; best = m; }
     }
@@ -1445,7 +1445,13 @@ function finConsolidatePanel(reconcile) {
   const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleDuplicates, confirmedDuplicates } = reconcile;
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
   const byIestin = manualOnly.length - byJangelo;
-  const sortedStatementOnly = [...statementOnly].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  // Ria stopped logging Bus/MRT rides by hand — those will always show up here and
+  // aren't a real gap, so keep them visually separate from purchases actually worth
+  // adding to the sheet.
+  const realMissing = statementOnly.filter((r) => r.category !== "Transportation");
+  const transportMissing = statementOnly.filter((r) => r.category === "Transportation");
+  const sortedStatementOnly = [...realMissing].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const sortedTransportMissing = [...transportMissing].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
   const sortedMatched = [...matched].sort((a, b) => a.manual.date < b.manual.date ? -1 : a.manual.date > b.manual.date ? 1 : 0);
 
   return `
@@ -1454,7 +1460,7 @@ function finConsolidatePanel(reconcile) {
       <p class="fin-consolidate-note">Matches your RJ Bahay sheet against these statements by date (within 4 days) and exact amount. Entries paid by Jangelo won't match here — they're not on your own card or bank account, so that's expected, not a miss.</p>
       <div class="fin-kpis">
         <div class="fin-kpi"><div class="fin-kpi-label">Matched</div><div class="fin-kpi-value">${matched.length}</div><div class="fin-kpi-sub">same purchase, already logged</div></div>
-        <div class="fin-kpi"><div class="fin-kpi-label">Missing from your log</div><div class="fin-kpi-value">${statementOnly.length}</div><div class="fin-kpi-sub">on your statements, not logged yet</div></div>
+        <div class="fin-kpi"><div class="fin-kpi-label">Missing from your log</div><div class="fin-kpi-value">${realMissing.length}</div><div class="fin-kpi-sub">${transportMissing.length} more are Bus/MRT — not logged by choice</div></div>
         <div class="fin-kpi"><div class="fin-kpi-label">Only in your log</div><div class="fin-kpi-value">${manualOnly.length}</div><div class="fin-kpi-sub">${byIestin} by you, ${byJangelo} by Jangelo</div></div>
       </div>
       ${possibleMatches.length ? `
@@ -1527,8 +1533,8 @@ function finConsolidatePanel(reconcile) {
           }</li>`).join("")}
       </ul>` : ""}
       <div class="fin-card-head">
-        <h4 class="fin-sub-h">Missing from your log (${statementOnly.length})</h4>
-        ${statementOnly.length ? `<button id="fin-export-missing" class="btn-ghost">Export to Excel</button>` : ""}
+        <h4 class="fin-sub-h">Missing from your log (${realMissing.length})</h4>
+        ${realMissing.length ? `<button id="fin-export-missing" class="btn-ghost">Export to Excel</button>` : ""}
       </div>
       <div class="fin-scroll" style="max-height:320px;">
         <table class="fin-table">
@@ -1542,6 +1548,17 @@ function finConsolidatePanel(reconcile) {
             </tr>`).join("")}</tbody>
         </table>
       </div>
+      ${transportMissing.length ? `
+      <details class="fin-details">
+        <summary>Bus/MRT rides not in your log (${transportMissing.length}) — not logged by choice, not a gap</summary>
+        <div class="fin-scroll" style="max-height:220px;">
+          <table class="fin-table">
+            <thead><tr><th>Date</th><th>Item</th><th class="fin-num">Cost</th></tr></thead>
+            <tbody>${sortedTransportMissing.map((r) => `
+              <tr><td>${esc(finFmtDate(r.date))}</td><td>${esc(r.item)}</td><td class="fin-num">${esc(finFmtSGD(r.sgd))}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </details>` : ""}
       <details class="fin-details">
         <summary>Matched pairs (${matched.length}) — same purchase, logged once</summary>
         <p class="fin-consolidate-note">Exact amount + close date isn't a 100% guarantee (two unrelated charges can share an amount by coincidence) — split any pair here that isn't really the same purchase.</p>
@@ -1659,7 +1676,8 @@ function renderFinance() {
     }));
     const exportBtn = $("#fin-export-missing");
     if (exportBtn) exportBtn.addEventListener("click", () => {
-      finExportXlsx(reconcile.statementOnly, `RJ Bahay - missing entries ${todayIso()}.xlsx`);
+      const realMissing = reconcile.statementOnly.filter((r) => r.category !== "Transportation");
+      finExportXlsx(realMissing, `RJ Bahay - missing entries ${todayIso()}.xlsx`);
     });
     return;
   }
