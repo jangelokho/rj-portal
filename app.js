@@ -1210,29 +1210,53 @@ function finManualRows() {
 // Word-overlap check (words of 4+ letters, so "the"/"and"/"m1" don't count as a
 // match) — the signal that separates a genuine same-purchase pair ("Fairprice
 // pasalubong" / "Fairprice Finest") from a same-amount coincidence ("MR DIY" /
-// "Lunch Chiken" both happening to cost $11.90).
+// "Lunch Chiken" both happening to cost $11.90). Words this common in Ria's own
+// vocabulary ("jixiong" is her go-to hawker stall, "lunch"/"chicken"/"busmrt" recur
+// constantly) aren't a signal either — two different $5 "jixiong lunch"es on
+// different days aren't the same purchase just because they share those words.
+const FIN_TOKEN_STOPWORDS = new Set([
+  "lunch", "dinner", "jixiong", "grab", "chicken", "food", "busmrt", "bus", "fish",
+  "soup", "hawker", "thomson", "curry", "coffee", "drinks", "breakfast",
+]);
 function finTokens(s) {
-  return new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length >= 4));
+  return new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
+    .filter((w) => w.length >= 4 && !FIN_TOKEN_STOPWORDS.has(w)));
 }
 function finSharesToken(a, b) {
   const tb = finTokens(b);
   for (const t of finTokens(a)) if (tb.has(t)) return true;
   return false;
 }
+// "M1 Mobile Subscription - Iestin" and "... - Jang" are two different people's own
+// subscriptions, not the same bill logged twice — never treat those as duplicates
+// of each other regardless of how much text they share.
+function finDifferentPerson(a, b) {
+  // Ria refers to herself as both "Iestin" and "Ria" in her own item text (e.g.
+  // "Night Safari Grab Jang" next to "Night Safari Grab Ria" — two separate rides,
+  // not one trip logged twice) — either counts as "her".
+  const isRia = (s) => /iestin|\bria\b/i.test(s), isJang = (s) => /\bjang(elo)?\b/i.test(s);
+  return (isRia(a) && isJang(b) && !isJang(a) && !isRia(b))
+    || (isJang(a) && isRia(b) && !isRia(a) && !isJang(b));
+}
 
 // Confirmations from the "possible matches"/"possible duplicates" review lists are
 // judgment calls only Ria can make (a same-amount coincidence looks identical to a
 // real match on paper) — persisted client-side since this static app has nowhere
-// else to keep them.
+// else to keep them. Dismissals are the opposite call ("no, that's a different,
+// separate purchase") — kept in their own set so a dismissed pair never confirms
+// itself back in through the "consolidate all shown" bulk button.
 const FIN_CONFIRMED_KEY = "rj_fin_confirmed";
-function finLoadConfirmed() {
-  try { return new Set(JSON.parse(localStorage.getItem(FIN_CONFIRMED_KEY) || "[]")); } catch { return new Set(); }
+const FIN_DISMISSED_KEY = "rj_fin_dismissed";
+function finLoadSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch { return new Set(); }
 }
-function finSaveConfirmed(set) {
-  try { localStorage.setItem(FIN_CONFIRMED_KEY, JSON.stringify([...set])); } catch { /* private mode / quota */ }
+function finSaveSet(key, set) {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* private mode / quota */ }
 }
-state.finConfirmed = finLoadConfirmed();
-function finConfirm(key) { state.finConfirmed.add(key); finSaveConfirmed(state.finConfirmed); }
+state.finConfirmed = finLoadSet(FIN_CONFIRMED_KEY);
+state.finDismissed = finLoadSet(FIN_DISMISSED_KEY);
+function finConfirm(key) { state.finConfirmed.add(key); finSaveSet(FIN_CONFIRMED_KEY, state.finConfirmed); }
+function finDismiss(key) { state.finDismissed.add(key); finSaveSet(FIN_DISMISSED_KEY, state.finDismissed); }
 
 // Two passes, tightest first: same date + same amount, then within 4 days + same
 // amount. Ria logs a few days late/early relative to the actual posting date, so a
@@ -1283,7 +1307,7 @@ function finReconcile() {
       if (state.finConfirmed.has(key)) {
         usedStatement.add(s.idx); usedManual.add(best.idx);
         matched.push({ manual: best, statement: s, daysApart: bestDist });
-      } else {
+      } else if (!state.finDismissed.has(key)) {
         possibleMatches.push({ manual: best, statement: s, daysApart: bestDist, key });
       }
     }
@@ -1292,23 +1316,38 @@ function finReconcile() {
   // Possible duplicates WITHIN the manual log itself — same exact amount, within 5
   // days, sharing a word. Ria mentioned she once forwarded a Citibank statement PDF
   // straight to Darth Mitbot, which auto-logs every line — that would double-log
-  // anything she'd also typed in by hand herself.
+  // anything she'd also typed in by hand herself, and not always as just a pair (a
+  // dinner logged by hand, then bot-ingested twice more, is a group of 3). Grouped
+  // as connected components rather than one-shot pairing so a group like that
+  // surfaces as one 3-way cluster instead of a pair plus a leftover single.
   const stillManualOnly = manual.filter((m) => !usedManual.has(m.idx));
-  const dupUsed = new Set();
-  const possibleDuplicates = [];
-  const confirmedDuplicates = [];
-  for (let i = 0; i < stillManualOnly.length; i++) {
-    if (dupUsed.has(i)) continue;
-    for (let j = i + 1; j < stillManualOnly.length; j++) {
-      if (dupUsed.has(j)) continue;
+  const n = stillManualOnly.length;
+  const adj = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
       const a = stillManualOnly[i], b = stillManualOnly[j];
-      if (Math.abs(a.cost - b.cost) <= 0.01 && finDaysApart(a.date, b.date) <= 5 && finSharesToken(a.item, b.item)) {
-        const key = `pd|${a.idx}|${b.idx}`;
-        (state.finConfirmed.has(key) ? confirmedDuplicates : possibleDuplicates).push({ a, b, key });
-        dupUsed.add(i); dupUsed.add(j);
-        break;
+      if (Math.abs(a.cost - b.cost) <= 0.01 && finDaysApart(a.date, b.date) <= 5
+        && finSharesToken(a.item, b.item) && !finDifferentPerson(a.item, b.item)) {
+        adj[i].push(j); adj[j].push(i);
       }
     }
+  }
+  const seen = new Array(n).fill(false);
+  const possibleDuplicates = [];
+  const confirmedDuplicates = [];
+  for (let i = 0; i < n; i++) {
+    if (seen[i]) continue;
+    const stack = [i], members = [];
+    seen[i] = true;
+    while (stack.length) {
+      const u = stack.pop(); members.push(stillManualOnly[u]);
+      for (const v of adj[u]) if (!seen[v]) { seen[v] = true; stack.push(v); }
+    }
+    if (members.length < 2) continue;
+    members.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+    const key = `pd|${members.map((m) => m.idx).sort((a, b) => a - b).join(",")}`;
+    if (state.finDismissed.has(key)) continue;
+    (state.finConfirmed.has(key) ? confirmedDuplicates : possibleDuplicates).push({ members, key });
   }
 
   const manualOnly = manual.filter((m) => !usedManual.has(m.idx));
@@ -1363,7 +1402,10 @@ function finConsolidatePanel(reconcile) {
                 <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
                 <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
                 <td>${p.daysApart}d</td>
-                <td><button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button></td>
+                <td class="fin-review-actions">
+                  <button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button>
+                  <button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button>
+                </td>
               </tr>`).join("")}</tbody>
           </table>
         </div>
@@ -1374,24 +1416,26 @@ function finConsolidatePanel(reconcile) {
           <h4 class="fin-sub-h">Possible duplicates in your own log (${possibleDuplicates.length})</h4>
           <button class="btn-ghost fin-consolidate-all">Consolidate all shown</button>
         </div>
-        <p class="fin-consolidate-note">Same exact amount, logged close together, in your OWN sheet — likely the same purchase entered twice (by hand, and again from a statement forwarded to Darth Mitbot). Confirm to flag which pair to clean up there.</p>
+        <p class="fin-consolidate-note">Same exact amount, logged close together, in your OWN sheet — likely the same purchase entered more than once (by hand, and again from a statement forwarded to Darth Mitbot — sometimes that's 3 copies, not 2). Confirm to flag the group for cleanup there.</p>
         <div class="fin-scroll" style="max-height:320px;">
           <table class="fin-table fin-review-table">
-            <thead><tr><th>Entry A</th><th>Entry B</th><th class="fin-num">Cost</th><th></th></tr></thead>
+            <thead><tr><th>Entries logged as one purchase</th><th class="fin-num">Cost</th><th></th></tr></thead>
             <tbody>${possibleDuplicates.map((p) => `
               <tr>
-                <td>${esc(finFmtDate(p.a.date))} "${esc(p.a.item)}"</td>
-                <td>${esc(finFmtDate(p.b.date))} "${esc(p.b.item)}"</td>
-                <td class="fin-num">${esc(finFmtSGD(p.a.cost))}</td>
-                <td><button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button></td>
+                <td>${p.members.map((m) => `${esc(finFmtDate(m.date))} "${esc(m.item)}"`).join("<br>")}</td>
+                <td class="fin-num">${esc(finFmtSGD(p.members[0].cost))}</td>
+                <td class="fin-review-actions">
+                  <button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button>
+                  <button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchases</button>
+                </td>
               </tr>`).join("")}</tbody>
           </table>
         </div>
       </div>` : ""}
       ${confirmedDuplicates.length ? `
-      <h4 class="fin-sub-h">Confirmed duplicates — delete one of each pair from your sheet (${confirmedDuplicates.length})</h4>
+      <h4 class="fin-sub-h">Confirmed duplicates — keep one, delete the rest from your sheet (${confirmedDuplicates.length} group${confirmedDuplicates.length === 1 ? "" : "s"})</h4>
       <ul class="fin-cc-list">
-        ${confirmedDuplicates.map((p) => `<li>${esc(finFmtDate(p.a.date))} "${esc(p.a.item)}" (${esc(finFmtSGD(p.a.cost))}) ↔ ${esc(finFmtDate(p.b.date))} "${esc(p.b.item)}"</li>`).join("")}
+        ${confirmedDuplicates.map((p) => `<li>${p.members.map((m) => `${esc(finFmtDate(m.date))} "${esc(m.item)}"`).join(" ↔ ")} (${esc(finFmtSGD(p.members[0].cost))} each)</li>`).join("")}
       </ul>` : ""}
       <h4 class="fin-sub-h">Credit card bill payments</h4>
       <ul class="fin-cc-list">
@@ -1531,6 +1575,7 @@ function renderFinance() {
 
   if (state.finTab === "consolidate") {
     $$(".fin-confirm-btn[data-key]").forEach((btn) => btn.addEventListener("click", () => { finConfirm(btn.dataset.key); renderFinance(); }));
+    $$(".fin-dismiss-btn[data-key]").forEach((btn) => btn.addEventListener("click", () => { finDismiss(btn.dataset.key); renderFinance(); }));
     $$(".fin-consolidate-all").forEach((btn) => btn.addEventListener("click", () => {
       const section = btn.closest(".fin-review-section");
       Array.from(section.querySelectorAll(".fin-confirm-btn[data-key]")).forEach((el) => finConfirm(el.dataset.key));
