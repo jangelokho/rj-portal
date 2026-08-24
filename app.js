@@ -874,6 +874,7 @@ state.mode = localStorage.getItem(MODE_KEY) === "finance" ? "finance" : "list";
 state.finSearch = "";
 state.finCategory = "all";
 state.finMonth = "all";
+state.finSort = "date-desc"; // 'date-desc' | 'cost-desc' | 'cost-asc'
 
 const FIN_CATEGORY_ORDER = [
   "Food", "Groceries/Supplies", "Transportation", "Shopping",
@@ -1072,7 +1073,11 @@ function finFilteredRows() {
 
 function finTransactionTable(rows, enrichMap) {
   if (!rows.length) return `<div class="fin-empty">No transactions match this filter.</div>`;
-  const sorted = [...rows].sort((a, b) => b.date < a.date ? -1 : b.date > a.date ? 1 : 0);
+  const sorted = [...rows].sort((a, b) => {
+    if (state.finSort === "cost-desc") return b.sgd - a.sgd;
+    if (state.finSort === "cost-asc") return a.sgd - b.sgd;
+    return b.date < a.date ? -1 : b.date > a.date ? 1 : 0;
+  });
   return `
     <div class="fin-scroll">
       <table class="fin-table">
@@ -1776,6 +1781,11 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
             <option value="all">All months</option>
             ${monthOptions}
           </select>
+          <select id="fin-sort-filter">
+            <option value="date-desc" ${state.finSort === "date-desc" ? "selected" : ""}>Newest first</option>
+            <option value="cost-desc" ${state.finSort === "cost-desc" ? "selected" : ""}>Cost: high to low</option>
+            <option value="cost-asc" ${state.finSort === "cost-asc" ? "selected" : ""}>Cost: low to high</option>
+          </select>
         </div>
         ${finTransactionTable(filtered, enrichMap)}
       </div>
@@ -1854,6 +1864,7 @@ function renderFinance() {
   });
   $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
+  $("#fin-sort-filter").addEventListener("change", (e) => { state.finSort = e.target.value; renderFinance(); });
   const insightsToggle = $("#fin-insights-toggle");
   if (insightsToggle) insightsToggle.addEventListener("click", () => { state.finShowInsights = !state.finShowInsights; renderFinance(); });
   // Clicking the already-selected month clears the filter back to "All months".
