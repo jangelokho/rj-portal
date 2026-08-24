@@ -1255,8 +1255,17 @@ function finSaveSet(key, set) {
 }
 state.finConfirmed = finLoadSet(FIN_CONFIRMED_KEY);
 state.finDismissed = finLoadSet(FIN_DISMISSED_KEY);
-function finConfirm(key) { state.finConfirmed.add(key); finSaveSet(FIN_CONFIRMED_KEY, state.finConfirmed); }
-function finDismiss(key) { state.finDismissed.add(key); finSaveSet(FIN_DISMISSED_KEY, state.finDismissed); }
+// Mutually exclusive — confirming a pair un-dismisses it and vice versa, so a
+// previously-confirmed match can still be corrected later via Split, and undoing
+// that isn't a dead end either.
+function finConfirm(key) {
+  state.finConfirmed.add(key); state.finDismissed.delete(key);
+  finSaveSet(FIN_CONFIRMED_KEY, state.finConfirmed); finSaveSet(FIN_DISMISSED_KEY, state.finDismissed);
+}
+function finDismiss(key) {
+  state.finDismissed.add(key); state.finConfirmed.delete(key);
+  finSaveSet(FIN_DISMISSED_KEY, state.finDismissed); finSaveSet(FIN_CONFIRMED_KEY, state.finConfirmed);
+}
 
 // Two passes, tightest first: same date + same amount, then within 4 days + same
 // amount. Ria logs a few days late/early relative to the actual posting date, so a
@@ -1268,19 +1277,29 @@ function finReconcile() {
   const usedStatement = new Set();
   const usedManual = new Set();
   const matched = [];
+  // Exact amount + close date alone isn't a guaranteed match (two unrelated $100
+  // charges 2 days apart happens) — so even here, a dismissed pairing is skipped in
+  // favor of the next-nearest candidate rather than forced back together.
   function tryMatch(maxDays) {
     for (const m of manual) {
       if (usedManual.has(m.idx)) continue;
-      let best = null, bestDist = Infinity;
+      const candidates = [];
       for (let i = 0; i < statementRows.length; i++) {
         if (usedStatement.has(i)) continue;
         const s = statementRows[i];
         if (Math.abs(s.sgd - m.cost) > 0.01) continue;
         const dd = finDaysApart(s.date, m.date);
         if (dd > maxDays) continue;
-        if (dd < bestDist) { bestDist = dd; best = i; }
+        candidates.push({ i, dd });
       }
-      if (best != null) { usedStatement.add(best); usedManual.add(m.idx); matched.push({ manual: m, statement: statementRows[best], daysApart: bestDist }); }
+      candidates.sort((a, b) => a.dd - b.dd);
+      for (const c of candidates) {
+        const key = `sm|${c.i}|${m.idx}`;
+        if (state.finDismissed.has(key)) continue;
+        usedStatement.add(c.i); usedManual.add(m.idx);
+        matched.push({ manual: m, statement: statementRows[c.i], daysApart: c.dd, key });
+        break;
+      }
     }
   }
   tryMatch(0);
@@ -1306,7 +1325,7 @@ function finReconcile() {
       const key = pairKey(s, best);
       if (state.finConfirmed.has(key)) {
         usedStatement.add(s.idx); usedManual.add(best.idx);
-        matched.push({ manual: best, statement: s, daysApart: bestDist });
+        matched.push({ manual: best, statement: s, daysApart: bestDist, key });
       } else if (!state.finDismissed.has(key)) {
         possibleMatches.push({ manual: best, statement: s, daysApart: bestDist, key });
       }
@@ -1470,15 +1489,17 @@ function finConsolidatePanel(reconcile) {
       </div>
       <details class="fin-details">
         <summary>Matched pairs (${matched.length}) — same purchase, logged once</summary>
+        <p class="fin-consolidate-note">Exact amount + close date isn't a 100% guarantee (two unrelated charges can share an amount by coincidence) — split any pair here that isn't really the same purchase.</p>
         <div class="fin-scroll" style="max-height:320px;">
-          <table class="fin-table">
-            <thead><tr><th>Your log</th><th>Statement</th><th class="fin-num">Cost</th><th>Gap</th></tr></thead>
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>Your log</th><th>Statement</th><th class="fin-num">Cost</th><th>Gap</th><th></th></tr></thead>
             <tbody>${sortedMatched.map((p) => `
               <tr>
                 <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
                 <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
                 <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
                 <td>${p.daysApart === 0 ? "same day" : `${p.daysApart}d`}</td>
+                <td class="fin-review-actions"><button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button></td>
               </tr>`).join("")}</tbody>
           </table>
         </div>
