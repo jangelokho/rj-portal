@@ -962,7 +962,9 @@ function finCategoryChart(byCategory, total) {
   }).join("")}</div>`;
 }
 
-function finMonthlyChart(byMonth) {
+// Each column is clickable — sets the month filter (wired in renderFinance) so the
+// transaction table AND the category breakdown drill into that one month.
+function finMonthlyChart(byMonth, selectedMonth) {
   const months = Object.keys(byMonth).sort();
   if (!months.length) return `<div class="fin-empty">No monthly data.</div>`;
   const max = Math.max(1, ...months.map((m) => Math.abs(byMonth[m])));
@@ -970,7 +972,7 @@ function finMonthlyChart(byMonth) {
     const v = byMonth[m];
     const h = Math.max(2, (Math.abs(v) / max) * 100);
     return `
-      <div class="fin-vbar-col" title="${esc(finFmtMonth(m))}: ${esc(finFmtSGD(v))}">
+      <div class="fin-vbar-col${m === selectedMonth ? " selected" : ""}" data-month="${m}" title="${esc(finFmtMonth(m))}: ${esc(finFmtSGD(v))} — click to filter">
         <div class="fin-vbar-value">${finFmtSGD(v).replace("S$", "")}</div>
         <div class="fin-vbar-track"><div class="fin-vbar-fill" style="height:${h}%"></div></div>
         <div class="fin-vbar-label">${esc(finFmtMonthShort(m))}</div>
@@ -997,13 +999,13 @@ function finCategorySummaryTable(byCategory, total) {
     </table>`;
 }
 
-function finMonthlySummaryTable(byMonth, total) {
+function finMonthlySummaryTable(byMonth, total, selectedMonth) {
   const months = Object.keys(byMonth).sort();
   return `
-    <table class="fin-summary-table">
+    <table class="fin-summary-table fin-summary-table-clickable">
       <thead><tr><th>Month</th><th>SGD</th><th>PHP</th></tr></thead>
       <tbody>${months.map((m) => `
-        <tr>
+        <tr data-month="${m}" class="${m === selectedMonth ? "selected" : ""}">
           <td>${esc(finFmtMonth(m))}</td>
           <td class="fin-num">${esc(finFmtSGD(byMonth[m]))}</td>
           <td class="fin-num">${esc(finFmtPHP(byMonth[m]))}</td>
@@ -1093,9 +1095,14 @@ function finInsights(all, byMonth) {
     if (topVal > 0 && otherAvg > 0 && topVal > otherAvg * 1.3 && topVal - otherAvg > 100) catFlags.push({ cat, topVal, otherAvg });
   }
 
+  const open = state.finShowInsights;
   return `
     <div class="fin-card fin-insights">
-      <h3>Smart summary</h3>
+      <div class="fin-card-head">
+        <h3>Smart summary</h3>
+        <button id="fin-insights-toggle" class="fin-insights-toggle">${open ? "Hide" : "Show"}</button>
+      </div>
+      ${open ? `
       <p>Across ${months.length} months (${esc(finFmtMonth(months[0]))}–${esc(finFmtMonth(months[months.length - 1]))}) that's <strong>${esc(finFmtSGD(overallTotal))}</strong> total. Split by what it actually is: <strong>${esc(finFmtSGD(bucket.rent))}</strong> rent (${pct(bucket.rent)}%), <strong>${esc(finFmtSGD(bucket.everyday))}</strong> everyday food/groceries/transport (${pct(bucket.everyday)}%), <strong>${esc(finFmtSGD(bucket.discretionary))}</strong> discretionary shopping/entertainment/health (${pct(bucket.discretionary)}%), and <strong>${esc(finFmtSGD(bucket.transfer))}</strong> transfers or cash movement between accounts — not day-to-day spending (${pct(bucket.transfer)}%).</p>
       <p><strong>${esc(finFmtMonth(top.m))}</strong> is your highest month at <strong>${esc(finFmtSGD(top.total))}</strong>${othersAvg ? `, ${(((top.total - othersAvg) / othersAvg) * 100).toFixed(0)}% above the ${esc(finFmtSGD(othersAvg))} average of the other months` : ""}. Its 5 biggest transactions alone are ${esc(finFmtSGD(biggestSum))} (${top.total ? ((biggestSum / top.total) * 100).toFixed(0) : 0}% of the month):</p>
       <ul class="fin-insight-list">
@@ -1103,6 +1110,7 @@ function finInsights(all, byMonth) {
       </ul>
       ${catFlags.length ? `<p>Worth a second look: ${catFlags.map((f) => `<strong>${esc(f.cat)}</strong> ran ${esc(finFmtSGD(f.topVal))} vs a usual ${esc(finFmtSGD(f.otherAvg))}`).join("; ")} — check neither is a duplicate or unexpected charge.</p>` : ""}
       ${bucketTop.transfer > 0 ? `<p class="fin-consolidate-note">${esc(finFmtSGD(bucketTop.transfer))} of ${esc(finFmtMonth(top.m))}'s total is transfers (Wise, ATM cash, bank-to-bank), not spending — the real day-to-day increase is smaller than the headline number suggests.</p>` : ""}
+      ` : ""}
     </div>`;
 }
 
@@ -1168,6 +1176,7 @@ function finIncomeExpenseTab() {
 
 // ---------- Consolidate: reconcile the statement-derived data against Ria's manual log ----------
 state.finTab = "overview"; // 'overview' | 'income' | 'consolidate'
+state.finShowInsights = true;
 
 // Rounded-up Citibank card payments, found as "BILL CCC" lines in the DBS history —
 // excluded from FINANCE_TXNS itself (they'd double-count the card's own itemized
@@ -1299,6 +1308,14 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months) {
   const byMonth = {};
   for (const r of all) (byMonth[r.date.slice(0, 7)] ||= []).push(r);
 
+  // Category breakdown drills into whichever month is selected (via the toolbar's
+  // month filter, or by clicking a month in the Monthly breakdown below) — the
+  // Monthly breakdown itself always shows every month, since you need to see them
+  // all to click between them.
+  const categoryScopeRows = state.finMonth === "all" ? all : (byMonth[state.finMonth] || []);
+  const categoryAgg = finAggregate(categoryScopeRows);
+  const categoryHeading = state.finMonth === "all" ? "Category breakdown" : `Category breakdown — ${esc(finFmtMonth(state.finMonth))}`;
+
   return `
     ${finInsights(all, byMonth)}
     <div class="fin-kpis">
@@ -1324,14 +1341,15 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months) {
       </div>
       <div class="fin-side">
         <div class="fin-card">
-          <h3>Category breakdown</h3>
-          ${finCategoryChart(agg.byCategory, agg.total)}
-          ${finCategorySummaryTable(agg.byCategory, agg.total)}
+          <h3>${categoryHeading}</h3>
+          ${finCategoryChart(categoryAgg.byCategory, categoryAgg.total)}
+          ${finCategorySummaryTable(categoryAgg.byCategory, categoryAgg.total)}
         </div>
         <div class="fin-card">
           <h3>Monthly breakdown</h3>
-          ${finMonthlyChart(agg.byMonth)}
-          ${finMonthlySummaryTable(agg.byMonth, agg.total)}
+          <p class="fin-consolidate-note">Click a month to filter the table and category breakdown to it.</p>
+          ${finMonthlyChart(agg.byMonth, state.finMonth)}
+          ${finMonthlySummaryTable(agg.byMonth, agg.total, state.finMonth)}
         </div>
       </div>
     </div>`;
@@ -1381,6 +1399,12 @@ function renderFinance() {
   });
   $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
+  const insightsToggle = $("#fin-insights-toggle");
+  if (insightsToggle) insightsToggle.addEventListener("click", () => { state.finShowInsights = !state.finShowInsights; renderFinance(); });
+  // Clicking the already-selected month clears the filter back to "All months".
+  const clickMonth = (m) => { state.finMonth = state.finMonth === m ? "all" : m; renderFinance(); };
+  $$(".fin-vbar-col[data-month]").forEach((el) => el.addEventListener("click", () => clickMonth(el.dataset.month)));
+  $$(".fin-summary-table-clickable tbody tr[data-month]").forEach((el) => el.addEventListener("click", () => clickMonth(el.dataset.month)));
 }
 
 // ---------- boot ----------
