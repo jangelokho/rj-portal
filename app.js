@@ -1119,7 +1119,7 @@ function finTransactionTable(rows, enrichMap) {
           return `
           <tr data-idx="${r.sourceIdx}" data-source="${r.source}">
             <td>${esc(finFmtDate(r.date))}</td>
-            <td>${esc(displayItem)}${finSourceTag(r)}${r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.sourceIdx}" data-source="${r.source}">reset</button>)</span>` : ""}</td>
+            <td>${esc(displayItem)}${finSourceTag(r)}${r.edited ? ` <span class="fin-edited-tag">(edited)</span>` : ""}</td>
             <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
             <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
             <td>${r.source === "manual" ? "" : `<button class="fin-edit-btn" data-idx="${r.sourceIdx}" data-source="${r.source}">Edit</button>`}</td>
@@ -1137,7 +1137,7 @@ function finEditRowForm(row) {
   return {
     itemCell: `<input type="text" class="fin-edit-item" value="${esc(row.item)}" />`,
     categoryCell: `<select class="fin-edit-category">${options}</select>`,
-    actionsCell: `<button class="fin-edit-save">Save</button><button class="btn-ghost fin-edit-cancel">Cancel</button>`,
+    actionsCell: `<button class="fin-edit-save">Save</button><button class="btn-ghost fin-edit-cancel">Cancel</button>${row.edited ? `<button class="btn-ghost fin-edit-reset">Reset</button>` : ""}`,
   };
 }
 
@@ -1956,11 +1956,8 @@ function renderFinance() {
       renderFinance();
     });
     tr.querySelector(".fin-edit-cancel").addEventListener("click", () => renderFinance());
-  }));
-  $$(".fin-reset-override[data-idx]").forEach((btn) => btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    finClearOverride(btn.dataset.source, Number(btn.dataset.idx));
-    renderFinance();
+    const resetBtn = tr.querySelector(".fin-edit-reset");
+    if (resetBtn) resetBtn.addEventListener("click", () => { finClearOverride(source, idx); renderFinance(); });
   }));
 }
 
