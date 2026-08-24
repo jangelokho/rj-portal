@@ -904,8 +904,11 @@ $$("#mode-switch .mode-btn").forEach((b) => {
   });
 });
 
+// idx is FINANCE_TXNS's own array position — stable across calls (unlike object
+// identity, since this maps a fresh array every time) so it can key an enrichment
+// lookup built from a separate finReconcile() call.
 function finRows() {
-  return (window.FINANCE_TXNS || []).map(([date, item, category, sgd]) => ({ date, item, category, sgd }));
+  return (window.FINANCE_TXNS || []).map(([date, item, category, sgd], idx) => ({ date, item, category, sgd, idx }));
 }
 function finFmtSGD(n) {
   const sign = n < 0 ? "-" : "";
@@ -1025,20 +1028,25 @@ function finFilteredRows() {
   });
 }
 
-function finTransactionTable(rows) {
+function finTransactionTable(rows, enrichMap) {
   if (!rows.length) return `<div class="fin-empty">No transactions match this filter.</div>`;
   const sorted = [...rows].sort((a, b) => b.date < a.date ? -1 : b.date > a.date ? 1 : 0);
   return `
     <div class="fin-scroll">
       <table class="fin-table">
         <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th></tr></thead>
-        <tbody>${sorted.map((r) => `
+        <tbody>${sorted.map((r) => {
+          // Prefer the manual log's item text over a statement line that's just the
+          // payment rail with no merchant name (a masked PayNow recipient, etc.).
+          const displayItem = (enrichMap && enrichMap.get(r.idx)) || r.item;
+          return `
           <tr>
             <td>${esc(finFmtDate(r.date))}</td>
-            <td>${esc(r.item)}</td>
+            <td>${esc(displayItem)}</td>
             <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
             <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
-          </tr>`).join("")}</tbody>
+          </tr>`;
+        }).join("")}</tbody>
       </table>
     </div>`;
 }
@@ -1196,8 +1204,35 @@ const EXCLUDED_TRANSFERS = [
 
 function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
 function finManualRows() {
-  return (window.MANUAL_TXNS || []).map(([date, item, category, cost, status]) => ({ date, item, category, cost, status }));
+  return (window.MANUAL_TXNS || []).map(([date, item, category, cost, status], idx) => ({ date, item, category, cost, status, idx }));
 }
+
+// Word-overlap check (words of 4+ letters, so "the"/"and"/"m1" don't count as a
+// match) — the signal that separates a genuine same-purchase pair ("Fairprice
+// pasalubong" / "Fairprice Finest") from a same-amount coincidence ("MR DIY" /
+// "Lunch Chiken" both happening to cost $11.90).
+function finTokens(s) {
+  return new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length >= 4));
+}
+function finSharesToken(a, b) {
+  const tb = finTokens(b);
+  for (const t of finTokens(a)) if (tb.has(t)) return true;
+  return false;
+}
+
+// Confirmations from the "possible matches"/"possible duplicates" review lists are
+// judgment calls only Ria can make (a same-amount coincidence looks identical to a
+// real match on paper) — persisted client-side since this static app has nowhere
+// else to keep them.
+const FIN_CONFIRMED_KEY = "rj_fin_confirmed";
+function finLoadConfirmed() {
+  try { return new Set(JSON.parse(localStorage.getItem(FIN_CONFIRMED_KEY) || "[]")); } catch { return new Set(); }
+}
+function finSaveConfirmed(set) {
+  try { localStorage.setItem(FIN_CONFIRMED_KEY, JSON.stringify([...set])); } catch { /* private mode / quota */ }
+}
+state.finConfirmed = finLoadConfirmed();
+function finConfirm(key) { state.finConfirmed.add(key); finSaveConfirmed(state.finConfirmed); }
 
 // Two passes, tightest first: same date + same amount, then within 4 days + same
 // amount. Ria logs a few days late/early relative to the actual posting date, so a
@@ -1207,10 +1242,11 @@ function finReconcile() {
   const statementRows = finRows();
   const manual = finManualRows();
   const usedStatement = new Set();
+  const usedManual = new Set();
   const matched = [];
   function tryMatch(maxDays) {
     for (const m of manual) {
-      if (m._matched) continue;
+      if (usedManual.has(m.idx)) continue;
       let best = null, bestDist = Infinity;
       for (let i = 0; i < statementRows.length; i++) {
         if (usedStatement.has(i)) continue;
@@ -1220,24 +1256,83 @@ function finReconcile() {
         if (dd > maxDays) continue;
         if (dd < bestDist) { bestDist = dd; best = i; }
       }
-      if (best != null) { usedStatement.add(best); m._matched = true; matched.push({ manual: m, statement: statementRows[best], daysApart: bestDist }); }
+      if (best != null) { usedStatement.add(best); usedManual.add(m.idx); matched.push({ manual: m, statement: statementRows[best], daysApart: bestDist }); }
     }
   }
   tryMatch(0);
   tryMatch(4);
-  const manualOnly = manual.filter((m) => !m._matched);
-  const statementOnly = statementRows.filter((_, i) => !usedStatement.has(i));
+
+  // Possible matches: still-unmatched pairs with the SAME exact amount, either
+  // within 10 days outright, or further apart but sharing a real word — cuts most
+  // of the pure-coincidence noise a same-amount-only widened window produces.
+  const pairKey = (s, m) => `pm|${s.idx}|${m.idx}`;
+  const possibleMatches = [];
+  for (const s of statementRows) {
+    if (usedStatement.has(s.idx)) continue;
+    let best = null, bestDist = Infinity;
+    for (const m of manual) {
+      if (usedManual.has(m.idx)) continue;
+      if (Math.abs(m.cost - s.sgd) > 0.01) continue;
+      const dd = finDaysApart(m.date, s.date);
+      if (dd > 10) continue;
+      if (dd > 4 && !finSharesToken(s.item, m.item)) continue;
+      if (dd < bestDist) { bestDist = dd; best = m; }
+    }
+    if (best) {
+      const key = pairKey(s, best);
+      if (state.finConfirmed.has(key)) {
+        usedStatement.add(s.idx); usedManual.add(best.idx);
+        matched.push({ manual: best, statement: s, daysApart: bestDist });
+      } else {
+        possibleMatches.push({ manual: best, statement: s, daysApart: bestDist, key });
+      }
+    }
+  }
+
+  // Possible duplicates WITHIN the manual log itself — same exact amount, within 5
+  // days, sharing a word. Ria mentioned she once forwarded a Citibank statement PDF
+  // straight to Darth Mitbot, which auto-logs every line — that would double-log
+  // anything she'd also typed in by hand herself.
+  const stillManualOnly = manual.filter((m) => !usedManual.has(m.idx));
+  const dupUsed = new Set();
+  const possibleDuplicates = [];
+  const confirmedDuplicates = [];
+  for (let i = 0; i < stillManualOnly.length; i++) {
+    if (dupUsed.has(i)) continue;
+    for (let j = i + 1; j < stillManualOnly.length; j++) {
+      if (dupUsed.has(j)) continue;
+      const a = stillManualOnly[i], b = stillManualOnly[j];
+      if (Math.abs(a.cost - b.cost) <= 0.01 && finDaysApart(a.date, b.date) <= 5 && finSharesToken(a.item, b.item)) {
+        const key = `pd|${a.idx}|${b.idx}`;
+        (state.finConfirmed.has(key) ? confirmedDuplicates : possibleDuplicates).push({ a, b, key });
+        dupUsed.add(i); dupUsed.add(j);
+        break;
+      }
+    }
+  }
+
+  const manualOnly = manual.filter((m) => !usedManual.has(m.idx));
+  const statementOnly = statementRows.filter((s) => !usedStatement.has(s.idx));
   const withManualMatch = (list) => list.map((p) => ({
     ...p,
     manualMatch: manual.find((m) => Math.abs(m.cost - p.amount) <= 0.5 && finDaysApart(m.date, p.date) <= 10) || null,
   }));
   const ccBillPayments = withManualMatch(CC_BILL_PAYMENTS);
   const excludedTransfers = withManualMatch(EXCLUDED_TRANSFERS);
-  return { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers };
+
+  // For the main transaction table: prefer the manual log's item text over a
+  // statement description that's just the payment rail with no merchant info
+  // (e.g. a masked PayNow recipient) — built from confirmed matches only.
+  const enrichMap = new Map();
+  for (const p of matched) {
+    if (/^PayNow transfer \(personal\)$/i.test(p.statement.item)) enrichMap.set(p.statement.idx, p.manual.item);
+  }
+
+  return { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleDuplicates, confirmedDuplicates, enrichMap };
 }
 
-function finConsolidatePanel() {
-  const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers } = finReconcile();
+function finConsolidatePanel(reconcile) {
+  const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleDuplicates, confirmedDuplicates } = reconcile;
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
   const byIestin = manualOnly.length - byJangelo;
   const sortedStatementOnly = [...statementOnly].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
@@ -1252,6 +1347,52 @@ function finConsolidatePanel() {
         <div class="fin-kpi"><div class="fin-kpi-label">Missing from your log</div><div class="fin-kpi-value">${statementOnly.length}</div><div class="fin-kpi-sub">on your statements, not logged yet</div></div>
         <div class="fin-kpi"><div class="fin-kpi-label">Only in your log</div><div class="fin-kpi-value">${manualOnly.length}</div><div class="fin-kpi-sub">${byIestin} by you, ${byJangelo} by Jangelo</div></div>
       </div>
+      ${possibleMatches.length ? `
+      <div class="fin-review-section" data-section="pm">
+        <div class="fin-card-head">
+          <h4 class="fin-sub-h">Possible matches to review (${possibleMatches.length})</h4>
+          <button class="btn-ghost fin-consolidate-all">Consolidate all shown</button>
+        </div>
+        <p class="fin-consolidate-note">Same exact amount, logged close in time — not close enough to auto-match. Confirm the ones that are really the same purchase, side by side.</p>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>Statement</th><th>Your log</th><th class="fin-num">Cost</th><th>Gap</th><th></th></tr></thead>
+            <tbody>${possibleMatches.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
+                <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
+                <td>${p.daysApart}d</td>
+                <td><button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button></td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
+      ${possibleDuplicates.length ? `
+      <div class="fin-review-section" data-section="pd">
+        <div class="fin-card-head">
+          <h4 class="fin-sub-h">Possible duplicates in your own log (${possibleDuplicates.length})</h4>
+          <button class="btn-ghost fin-consolidate-all">Consolidate all shown</button>
+        </div>
+        <p class="fin-consolidate-note">Same exact amount, logged close together, in your OWN sheet — likely the same purchase entered twice (by hand, and again from a statement forwarded to Darth Mitbot). Confirm to flag which pair to clean up there.</p>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>Entry A</th><th>Entry B</th><th class="fin-num">Cost</th><th></th></tr></thead>
+            <tbody>${possibleDuplicates.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.a.date))} "${esc(p.a.item)}"</td>
+                <td>${esc(finFmtDate(p.b.date))} "${esc(p.b.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.a.cost))}</td>
+                <td><button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button></td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
+      ${confirmedDuplicates.length ? `
+      <h4 class="fin-sub-h">Confirmed duplicates — delete one of each pair from your sheet (${confirmedDuplicates.length})</h4>
+      <ul class="fin-cc-list">
+        ${confirmedDuplicates.map((p) => `<li>${esc(finFmtDate(p.a.date))} "${esc(p.a.item)}" (${esc(finFmtSGD(p.a.cost))}) ↔ ${esc(finFmtDate(p.b.date))} "${esc(p.b.item)}"</li>`).join("")}
+      </ul>` : ""}
       <h4 class="fin-sub-h">Credit card bill payments</h4>
       <ul class="fin-cc-list">
         ${ccBillPayments.map((p) => `
@@ -1301,7 +1442,7 @@ function finConsolidatePanel() {
     </div>`;
 }
 
-function finOverviewTab(all, agg, filtered, filteredTotal, months) {
+function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
   const monthOptions = months.map((m) => `<option value="${m}" ${state.finMonth === m ? "selected" : ""}>${esc(finFmtMonth(m))}</option>`).join("");
   const categoryOptions = FIN_CATEGORY_ORDER.filter((c) => agg.byCategory[c])
     .map((c) => `<option value="${c}" ${state.finCategory === c ? "selected" : ""}>${esc(c)}</option>`).join("");
@@ -1337,7 +1478,7 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months) {
             ${monthOptions}
           </select>
         </div>
-        ${finTransactionTable(filtered)}
+        ${finTransactionTable(filtered, enrichMap)}
       </div>
       <div class="fin-side">
         <div class="fin-card">
@@ -1365,9 +1506,10 @@ function renderFinance() {
 
   const hasManual = !!window.MANUAL_TXNS;
   if (state.finTab === "consolidate" && !hasManual) state.finTab = "overview";
+  const reconcile = hasManual ? finReconcile() : null;
   const tabContent = state.finTab === "income" ? finIncomeExpenseTab()
-    : state.finTab === "consolidate" ? finConsolidatePanel()
-    : finOverviewTab(all, agg, filtered, filteredTotal, months);
+    : state.finTab === "consolidate" ? finConsolidatePanel(reconcile)
+    : finOverviewTab(all, agg, filtered, filteredTotal, months, reconcile && reconcile.enrichMap);
 
   $("#finance-view").innerHTML = `
     <div class="fin-head">
@@ -1387,6 +1529,15 @@ function renderFinance() {
     renderFinance();
   }));
 
+  if (state.finTab === "consolidate") {
+    $$(".fin-confirm-btn[data-key]").forEach((btn) => btn.addEventListener("click", () => { finConfirm(btn.dataset.key); renderFinance(); }));
+    $$(".fin-consolidate-all").forEach((btn) => btn.addEventListener("click", () => {
+      const section = btn.closest(".fin-review-section");
+      Array.from(section.querySelectorAll(".fin-confirm-btn[data-key]")).forEach((el) => finConfirm(el.dataset.key));
+      renderFinance();
+    }));
+    return;
+  }
   if (state.finTab !== "overview") return;
   $("#fin-search").addEventListener("input", (e) => {
     state.finSearch = e.target.value;

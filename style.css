@@ -639,6 +639,15 @@ body.mode-finance .finance-view { display: block; }
 .fin-details summary:hover { color: var(--list-accent); }
 .fin-details[open] summary { margin-bottom: 10px; }
 
+.fin-review-section { margin-top: 20px; }
+.fin-review-section .fin-card-head { margin-bottom: 4px; }
+.fin-review-section .fin-card-head h4 { margin: 0; }
+.fin-consolidate-all { background: transparent; border: 1px solid var(--list-accent); color: var(--list-accent); font-size: 12px; padding: 5px 12px; flex-shrink: 0; }
+.fin-consolidate-all:hover { background: var(--list-accent); color: #fff; }
+.fin-review-table td:last-child { text-align: right; }
+.fin-confirm-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 12px; padding: 3px 10px; }
+.fin-confirm-btn:hover { background: var(--ok); border-color: var(--ok); color: #fff; }
+
 @media (max-width: 1024px) {
   .fin-grid { flex-direction: column; }
   .fin-side { min-width: 0; }
