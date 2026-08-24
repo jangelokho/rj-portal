@@ -1085,6 +1085,43 @@ function finMonthlySummaryTable(byMonth, total, selectedMonth) {
     </table>`;
 }
 
+// Merchants you keep going back to — grouped by exact item text (already
+// normalized to one spelling per merchant earlier this session) within
+// spend-y categories only. Rent/transfers/subscriptions are excluded since
+// "recurring" there just means a bill, not a place you actually chose to
+// revisit. Needs 3+ visits to count as a "regular", not a coincidence.
+const FIN_REGULARS_CATEGORIES = ["Food", "Groceries/Supplies", "Shopping", "Entertainment", "Medicine/Health"];
+// Not real merchants, just a payment rail — "PayLah! top-up" is Ria reloading her
+// own wallet, tagged Food only because that's usually what the top-up went toward.
+const FIN_REGULARS_EXCLUDE = /^paylah! top-up$/i;
+function finRegulars(rows) {
+  const byMerchant = {};
+  for (const r of rows) {
+    if (!FIN_REGULARS_CATEGORIES.includes(r.category)) continue;
+    if (FIN_REGULARS_EXCLUDE.test(r.item)) continue;
+    const key = r.item;
+    const m = (byMerchant[key] ||= { item: key, category: r.category, count: 0, total: 0 });
+    m.count++;
+    m.total += r.sgd;
+  }
+  return Object.values(byMerchant)
+    .filter((m) => m.count >= 3)
+    .sort((a, b) => b.count - a.count || b.total - a.total);
+}
+function finRegularsTable(regulars) {
+  if (!regulars.length) return `<div class="fin-empty">No repeat merchants yet — need 3+ visits to count as a regular.</div>`;
+  return `
+    <table class="fin-summary-table fin-summary-table-clickable">
+      <thead><tr><th>Merchant</th><th>Visits</th><th class="fin-num">Total</th></tr></thead>
+      <tbody>${regulars.slice(0, 8).map((m) => `
+        <tr data-merchant="${esc(m.item)}" class="${state.finSearch === m.item ? "selected" : ""}">
+          <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[m.category] || "--fin-c-other"})"></span>${esc(m.item)}</span></td>
+          <td class="fin-num">${m.count}×</td>
+          <td class="fin-num">${esc(finFmtSGD(m.total))}</td>
+        </tr>`).join("")}</tbody>
+    </table>`;
+}
+
 function finFilteredRows() {
   const q = state.finSearch.trim().toLowerCase();
   const all = finHouseholdRows();
@@ -1866,6 +1903,11 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
           ${finMonthlyChart(agg.byMonth, state.finMonth)}
           ${finMonthlySummaryTable(agg.byMonth, agg.total, state.finMonth)}
         </div>
+        <div class="fin-card">
+          <h3>Your regulars 💕</h3>
+          <p class="fin-consolidate-note">Places you keep going back to (3+ visits). Click one to filter the table.</p>
+          ${finRegularsTable(finRegulars(all))}
+        </div>
       </div>
     </div>`;
 }
@@ -1937,6 +1979,10 @@ function renderFinance() {
   const clickMonth = (m) => { state.finMonth = state.finMonth === m ? "all" : m; renderFinance(); };
   $$(".fin-vbar-col[data-month]").forEach((el) => el.addEventListener("click", () => clickMonth(el.dataset.month)));
   $$(".fin-summary-table-clickable tbody tr[data-month]").forEach((el) => el.addEventListener("click", () => clickMonth(el.dataset.month)));
+  // Clicking a regular filters the table to that merchant; clicking the
+  // already-selected one clears the search back to empty.
+  const clickMerchant = (name) => { state.finSearch = state.finSearch === name ? "" : name; renderFinance(); };
+  $$(".fin-summary-table-clickable tbody tr[data-merchant]").forEach((el) => el.addEventListener("click", () => clickMerchant(el.dataset.merchant)));
 
   $$(".fin-edit-btn[data-idx]").forEach((btn) => btn.addEventListener("click", () => {
     const idx = Number(btn.dataset.idx);
