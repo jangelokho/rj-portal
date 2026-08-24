@@ -1257,7 +1257,7 @@ function finIncomeRows() {
 
 function finIncomeExpenseTab() {
   const income = finIncomeRows();
-  const expenses = finRows();
+  const expenses = finHouseholdRows();
   const months = [...new Set([...income.map((r) => r.date.slice(0, 7)), ...expenses.map((r) => r.date.slice(0, 7))])].sort();
   const incomeByMonth = {}, expenseByMonth = {};
   for (const r of income) incomeByMonth[r.date.slice(0, 7)] = (incomeByMonth[r.date.slice(0, 7)] || 0) + r.sgd;
