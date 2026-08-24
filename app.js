@@ -907,8 +907,15 @@ $$("#mode-switch .mode-btn").forEach((b) => {
 // idx is FINANCE_TXNS's own array position — stable across calls (unlike object
 // identity, since this maps a fresh array every time) so it can key an enrichment
 // lookup built from a separate finReconcile() call.
+// state.finOverrides (set up further below, alongside the other Finances
+// localStorage state) lets Ria correct a statement row's item text/category herself
+// — e.g. a "PayLah! top-up" she knows wasn't actually food — without editing the
+// source file. Merged in here so every reader of finRows() sees the correction.
 function finRows() {
-  return (window.FINANCE_TXNS || []).map(([date, item, category, sgd], idx) => ({ date, item, category, sgd, idx }));
+  return (window.FINANCE_TXNS || []).map(([date, item, category, sgd], idx) => {
+    const ov = (state.finOverrides || {})[idx];
+    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov };
+  });
 }
 function finFmtSGD(n) {
   const sign = n < 0 ? "-" : "";
@@ -929,6 +936,21 @@ function finFmtMonthShort(ym) {
 function finFmtDate(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Matches the RJ Bahay sheet's own columns (Month, Year, Date, Item, Category,
+// Cost) so the rows can be pasted straight into it — Cost is a plain number, not a
+// "$ 12.34" string, so it lands as a real number in Excel/Sheets, not text.
+function finExportXlsx(rows, filename) {
+  if (!window.XLSX) { alert("The export library didn't load (check your connection) — try again in a moment."); return; }
+  const data = rows.map((r) => {
+    const [y, m] = r.date.split("-").map(Number);
+    return { Month: m, Year: y, Date: finFmtDate(r.date), Item: r.item, Category: r.category, Cost: r.sgd };
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Missing entries");
+  XLSX.writeFile(wb, filename);
 }
 
 function finAggregate(rows) {
@@ -1034,21 +1056,34 @@ function finTransactionTable(rows, enrichMap) {
   return `
     <div class="fin-scroll">
       <table class="fin-table">
-        <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th></tr></thead>
+        <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th><th></th></tr></thead>
         <tbody>${sorted.map((r) => {
           // Prefer the manual log's item text over a statement line that's just the
           // payment rail with no merchant name (a masked PayNow recipient, etc.).
           const displayItem = (enrichMap && enrichMap.get(r.idx)) || r.item;
           return `
-          <tr>
+          <tr data-idx="${r.idx}">
             <td>${esc(finFmtDate(r.date))}</td>
-            <td>${esc(displayItem)}</td>
+            <td>${esc(displayItem)}${r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.idx}">reset</button>)</span>` : ""}</td>
             <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
             <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
+            <td><button class="fin-edit-btn" data-idx="${r.idx}">Edit</button></td>
           </tr>`;
         }).join("")}</tbody>
       </table>
     </div>`;
+}
+
+// Swaps one row into an inline item/category editor in place — a full renderFinance()
+// would also be fine, but this keeps the edit action from feeling like the whole
+// page reset while she's mid-correction.
+function finEditRowForm(row) {
+  const options = FIN_CATEGORY_ORDER.map((c) => `<option value="${c}" ${row.category === c ? "selected" : ""}>${esc(c)}</option>`).join("");
+  return {
+    itemCell: `<input type="text" class="fin-edit-item" value="${esc(row.item)}" />`,
+    categoryCell: `<select class="fin-edit-category">${options}</select>`,
+    actionsCell: `<button class="fin-edit-save">Save</button><button class="btn-ghost fin-edit-cancel">Cancel</button>`,
+  };
 }
 
 // ---------- Smart summary: everyday vs one-off vs transfers ----------
@@ -1255,6 +1290,23 @@ function finSaveSet(key, set) {
 }
 state.finConfirmed = finLoadSet(FIN_CONFIRMED_KEY);
 state.finDismissed = finLoadSet(FIN_DISMISSED_KEY);
+
+// Per-row corrections to a statement transaction's item text/category — e.g. "I
+// don't actually know what this PayLah top-up was for" — made directly in the
+// Overview table instead of asking for a source-file edit each time.
+const FIN_OVERRIDES_KEY = "rj_fin_overrides";
+function finLoadOverrides() {
+  try { return JSON.parse(localStorage.getItem(FIN_OVERRIDES_KEY) || "{}"); } catch { return {}; }
+}
+function finSaveOverrides() {
+  try { localStorage.setItem(FIN_OVERRIDES_KEY, JSON.stringify(state.finOverrides)); } catch { /* private mode / quota */ }
+}
+state.finOverrides = finLoadOverrides();
+function finSetOverride(idx, patch) {
+  state.finOverrides[idx] = { ...(state.finOverrides[idx] || {}), ...patch };
+  finSaveOverrides();
+}
+function finClearOverride(idx) { delete state.finOverrides[idx]; finSaveOverrides(); }
 // Mutually exclusive — confirming a pair un-dismisses it and vice versa, so a
 // previously-confirmed match can still be corrected later via Split, and undoing
 // that isn't a dead end either.
@@ -1474,7 +1526,10 @@ function finConsolidatePanel(reconcile) {
             p.manualMatch ? ` — <strong>found in your log</strong> (${esc(finFmtDate(p.manualMatch.date))} "${esc(p.manualMatch.item)}")` : ""
           }</li>`).join("")}
       </ul>` : ""}
-      <h4 class="fin-sub-h">Missing from your log (${statementOnly.length})</h4>
+      <div class="fin-card-head">
+        <h4 class="fin-sub-h">Missing from your log (${statementOnly.length})</h4>
+        ${statementOnly.length ? `<button id="fin-export-missing" class="btn-ghost">Export to Excel</button>` : ""}
+      </div>
       <div class="fin-scroll" style="max-height:320px;">
         <table class="fin-table">
           <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th></tr></thead>
@@ -1602,6 +1657,10 @@ function renderFinance() {
       Array.from(section.querySelectorAll(".fin-confirm-btn[data-key]")).forEach((el) => finConfirm(el.dataset.key));
       renderFinance();
     }));
+    const exportBtn = $("#fin-export-missing");
+    if (exportBtn) exportBtn.addEventListener("click", () => {
+      finExportXlsx(reconcile.statementOnly, `RJ Bahay - missing entries ${todayIso()}.xlsx`);
+    });
     return;
   }
   if (state.finTab !== "overview") return;
@@ -1622,6 +1681,30 @@ function renderFinance() {
   const clickMonth = (m) => { state.finMonth = state.finMonth === m ? "all" : m; renderFinance(); };
   $$(".fin-vbar-col[data-month]").forEach((el) => el.addEventListener("click", () => clickMonth(el.dataset.month)));
   $$(".fin-summary-table-clickable tbody tr[data-month]").forEach((el) => el.addEventListener("click", () => clickMonth(el.dataset.month)));
+
+  $$(".fin-edit-btn[data-idx]").forEach((btn) => btn.addEventListener("click", () => {
+    const idx = Number(btn.dataset.idx);
+    const tr = btn.closest("tr");
+    const row = finRows().find((r) => r.idx === idx);
+    if (!row || !tr) return;
+    const { itemCell, categoryCell, actionsCell } = finEditRowForm(row);
+    const cells = tr.children;
+    cells[1].innerHTML = itemCell;
+    cells[2].innerHTML = categoryCell;
+    cells[4].innerHTML = actionsCell;
+    tr.querySelector(".fin-edit-save").addEventListener("click", () => {
+      const newItem = tr.querySelector(".fin-edit-item").value.trim();
+      const newCategory = tr.querySelector(".fin-edit-category").value;
+      finSetOverride(idx, { item: newItem || row.item, category: newCategory });
+      renderFinance();
+    });
+    tr.querySelector(".fin-edit-cancel").addEventListener("click", () => renderFinance());
+  }));
+  $$(".fin-reset-override[data-idx]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    finClearOverride(Number(btn.dataset.idx));
+    renderFinance();
+  }));
 }
 
 // ---------- boot ----------

@@ -573,6 +573,16 @@ body.mode-finance .finance-view { display: block; }
 .fin-cat-swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 6px; flex-shrink: 0; }
 .fin-cat-name { display: inline-flex; align-items: center; }
 
+.fin-edit-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 3px 9px; white-space: nowrap; }
+.fin-edit-btn:hover { background: var(--bg-card-alt); color: var(--text); }
+.fin-edited-tag { font-size: 11px; color: var(--muted); }
+.fin-reset-override { background: transparent; border: none; color: var(--list-accent); font-size: 11px; padding: 0; text-decoration: underline; }
+.fin-reset-override:hover { background: transparent; filter: brightness(1.15); }
+.fin-edit-item { width: 100%; padding: 5px 8px; font-size: 13px; }
+.fin-edit-category { padding: 5px 22px 5px 8px; font-size: 13px; }
+.fin-edit-save, .fin-edit-cancel { font-size: 12px; padding: 4px 10px; }
+.fin-edit-save { margin-right: 6px; }
+
 .fin-summary-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
 .fin-summary-table th { text-align: right; font-size: 11px; color: var(--muted); font-weight: 400; padding: 4px 6px; }
 .fin-summary-table th:first-child { text-align: left; }
