@@ -874,7 +874,7 @@ state.mode = localStorage.getItem(MODE_KEY) === "finance" ? "finance" : "list";
 state.finSearch = "";
 state.finCategory = "all";
 state.finMonth = "all";
-state.finSort = "date-desc"; // 'date-desc' | 'cost-desc' | 'cost-asc'
+state.finSort = "date-desc"; // 'date-desc' | 'date-asc' | 'cost-desc' | 'cost-asc' | 'item-asc'
 state.finShowSource = false; // whether the "· Jangelo" tag is shown on his rows
 
 const FIN_CATEGORY_ORDER = [
@@ -1094,6 +1094,7 @@ function finTransactionTable(rows, enrichMap) {
     if (state.finSort === "cost-desc") return b.sgd - a.sgd;
     if (state.finSort === "cost-asc") return a.sgd - b.sgd;
     if (state.finSort === "item-asc") return a.item.localeCompare(b.item);
+    if (state.finSort === "date-asc") return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
     return b.date < a.date ? -1 : b.date > a.date ? 1 : 0;
   });
   return `
@@ -1389,7 +1390,22 @@ state.finDismissed = finLoadSet(FIN_DISMISSED_KEY);
 // Overview table instead of asking for a source-file edit each time.
 const FIN_OVERRIDES_KEY = "rj_fin_overrides";
 function finLoadOverrides() {
-  try { return JSON.parse(localStorage.getItem(FIN_OVERRIDES_KEY) || "{}"); } catch { return {}; }
+  let raw;
+  try { raw = JSON.parse(localStorage.getItem(FIN_OVERRIDES_KEY) || "{}"); } catch { return {}; }
+  // One-time migration: overrides saved before Jangelo's rows became editable were
+  // keyed by bare index (no source prefix). Without this they'd silently stop
+  // showing up the moment the newer, source-prefixed lookup shipped — every key
+  // back then was necessarily Ria's, so they migrate straight to "ria:<idx>".
+  let migrated = false;
+  const out = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (/^\d+$/.test(key)) { out[`ria:${key}`] = val; migrated = true; }
+    else out[key] = val;
+  }
+  if (migrated) {
+    try { localStorage.setItem(FIN_OVERRIDES_KEY, JSON.stringify(out)); } catch { /* private mode / quota */ }
+  }
+  return out;
 }
 function finSaveOverrides() {
   try { localStorage.setItem(FIN_OVERRIDES_KEY, JSON.stringify(state.finOverrides)); } catch { /* private mode / quota */ }
@@ -1819,6 +1835,7 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
           </select>
           <select id="fin-sort-filter">
             <option value="date-desc" ${state.finSort === "date-desc" ? "selected" : ""}>Newest first</option>
+            <option value="date-asc" ${state.finSort === "date-asc" ? "selected" : ""}>Oldest first</option>
             <option value="cost-desc" ${state.finSort === "cost-desc" ? "selected" : ""}>Cost: high to low</option>
             <option value="cost-asc" ${state.finSort === "cost-asc" ? "selected" : ""}>Cost: low to high</option>
             <option value="item-asc" ${state.finSort === "item-asc" ? "selected" : ""}>Item: A to Z</option>
