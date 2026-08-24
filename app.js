@@ -933,6 +933,14 @@ const MANUAL_LOG_INCLUSIONS = [
 function finManualInclusionRows() {
   return MANUAL_LOG_INCLUSIONS.map((r, idx) => ({ ...r, idx, source: "manual" }));
 }
+// The item text as it appears in the raw source file, ignoring any override —
+// used wherever code needs to recognize a SPECIFIC known statement line (e.g.
+// CONSOLIDATED_GROUPS) regardless of whether Ria has since renamed it for display.
+function finRawItem(r) {
+  if (r.source === "ria") return (window.FINANCE_TXNS[r.sourceIdx] || [])[1];
+  if (r.source === "jangelo") return (window.JANGELO_TXNS[r.sourceIdx] || [])[1];
+  return r.item;
+}
 // Ria's + Jangelo's statements merged into one pool — the "most true expenses in
 // SG" picture, per Ria, since it's what actually left an account rather than what
 // made it into the manual log (which stays untouched — this only merges the two
@@ -1473,11 +1481,13 @@ function finReconcile() {
   tryMatch(4);
 
   // Confirmed many-to-one groups (see CONSOLIDATED_GROUPS) — pull their member rows
-  // out of circulation before the pairwise passes below ever see them.
+  // out of circulation before the pairwise passes below ever see them. Matched
+  // against the RAW source text (finRawItem), not r.item, so renaming a member row
+  // via the Edit button doesn't silently drop it out of its group.
   const consolidatedGroups = [];
   for (const g of CONSOLIDATED_GROUPS) {
     const rows = g.members
-      .map((mem) => statementRows.find((r) => r.date === mem.date && r.item === mem.item && Math.abs(r.sgd - mem.sgd) < 0.01 && !usedStatement.has(r.idx)))
+      .map((mem) => statementRows.find((r) => r.date === mem.date && finRawItem(r) === mem.item && Math.abs(r.sgd - mem.sgd) < 0.01 && !usedStatement.has(r.idx)))
       .filter(Boolean);
     const sum = rows.reduce((s, r) => s + r.sgd, 0);
     for (const r of rows) usedStatement.add(r.idx);
