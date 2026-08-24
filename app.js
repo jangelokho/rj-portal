@@ -875,6 +875,7 @@ state.finSearch = "";
 state.finCategory = "all";
 state.finMonth = "all";
 state.finSort = "date-desc"; // 'date-desc' | 'cost-desc' | 'cost-asc'
+state.finShowSource = false; // whether the "· Jangelo" tag is shown on his rows
 
 const FIN_CATEGORY_ORDER = [
   "Food", "Groceries/Supplies", "Transportation", "Shopping",
@@ -914,7 +915,7 @@ $$("#mode-switch .mode-btn").forEach((b) => {
 // source file. Merged in here so every reader of finRows() sees the correction.
 function finRows() {
   return (window.FINANCE_TXNS || []).map(([date, item, category, sgd], idx) => {
-    const ov = (state.finOverrides || {})[idx];
+    const ov = (state.finOverrides || {})[`ria:${idx}`];
     return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "ria" };
   });
 }
@@ -1076,6 +1077,7 @@ function finTransactionTable(rows, enrichMap) {
   const sorted = [...rows].sort((a, b) => {
     if (state.finSort === "cost-desc") return b.sgd - a.sgd;
     if (state.finSort === "cost-asc") return a.sgd - b.sgd;
+    if (state.finSort === "item-asc") return a.item.localeCompare(b.item);
     return b.date < a.date ? -1 : b.date > a.date ? 1 : 0;
   });
   return `
@@ -1083,21 +1085,19 @@ function finTransactionTable(rows, enrichMap) {
       <table class="fin-table">
         <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th><th></th></tr></thead>
         <tbody>${sorted.map((r) => {
-          const isJangelo = r.source === "jangelo";
           // Prefer the manual log's item text over a statement line that's just the
           // payment rail with no merchant name (a masked PayNow recipient, etc.) —
           // enrichMap is keyed by the household-wide idx now, so this works for
-          // either source. Editing (Edit button, overrides) is still Ria-only,
-          // keyed by her own sourceIdx.
+          // either source. Editing (Edit button, overrides) works for both sources
+          // now, each keyed by its own source + sourceIdx.
           const displayItem = (enrichMap && enrichMap.get(r.idx)) || r.item;
-          const sourceTag = isJangelo ? ` <span class="fin-edited-tag">· Jangelo</span>` : "";
           return `
-          <tr data-idx="${r.sourceIdx}">
+          <tr data-idx="${r.sourceIdx}" data-source="${r.source}">
             <td>${esc(finFmtDate(r.date))}</td>
-            <td>${esc(displayItem)}${sourceTag}${!isJangelo && r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.sourceIdx}">reset</button>)</span>` : ""}</td>
+            <td>${esc(displayItem)}${finSourceTag(r)}${r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.sourceIdx}" data-source="${r.source}">reset</button>)</span>` : ""}</td>
             <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
             <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
-            <td>${isJangelo ? "" : `<button class="fin-edit-btn" data-idx="${r.sourceIdx}">Edit</button>`}</td>
+            <td><button class="fin-edit-btn" data-idx="${r.sourceIdx}" data-source="${r.source}">Edit</button></td>
           </tr>`;
         }).join("")}</tbody>
       </table>
@@ -1372,11 +1372,12 @@ function finSaveOverrides() {
   try { localStorage.setItem(FIN_OVERRIDES_KEY, JSON.stringify(state.finOverrides)); } catch { /* private mode / quota */ }
 }
 state.finOverrides = finLoadOverrides();
-function finSetOverride(idx, patch) {
-  state.finOverrides[idx] = { ...(state.finOverrides[idx] || {}), ...patch };
+function finSetOverride(source, idx, patch) {
+  const key = `${source}:${idx}`;
+  state.finOverrides[key] = { ...(state.finOverrides[key] || {}), ...patch };
   finSaveOverrides();
 }
-function finClearOverride(idx) { delete state.finOverrides[idx]; finSaveOverrides(); }
+function finClearOverride(source, idx) { delete state.finOverrides[`${source}:${idx}`]; finSaveOverrides(); }
 // Mutually exclusive — confirming a pair un-dismisses it and vice versa, so a
 // previously-confirmed match can still be corrected later via Split, and undoing
 // that isn't a dead end either.
@@ -1576,10 +1577,14 @@ function finReconcile() {
 // Feeds finHouseholdRows() — reconciliation is combined (finReconcile() above),
 // not run separately per person, per Ria ("merge the statements please").
 function finJangeloRows() {
-  return (window.JANGELO_TXNS || []).map(([date, item, category, sgd], idx) => ({ date, item, category, sgd, idx }));
+  return (window.JANGELO_TXNS || []).map(([date, item, category, sgd], idx) => {
+    const ov = (state.finOverrides || {})[`jangelo:${idx}`];
+    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "jangelo" };
+  });
 }
-// Small muted tag so a statement row's source is visible even once merged.
-function finSourceTag(r) { return r.source === "jangelo" ? ` <span class="fin-edited-tag">· Jangelo</span>` : ""; }
+// Small muted tag so a statement row's source is visible once merged — hidden by
+// default (Ria found it cluttered) behind the "Show who paid" toggle.
+function finSourceTag(r) { return r.source === "jangelo" && state.finShowSource ? ` <span class="fin-edited-tag">· Jangelo</span>` : ""; }
 function finConsolidatePanel(reconcile) {
   const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups } = reconcile;
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
@@ -1787,7 +1792,9 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
             <option value="date-desc" ${state.finSort === "date-desc" ? "selected" : ""}>Newest first</option>
             <option value="cost-desc" ${state.finSort === "cost-desc" ? "selected" : ""}>Cost: high to low</option>
             <option value="cost-asc" ${state.finSort === "cost-asc" ? "selected" : ""}>Cost: low to high</option>
+            <option value="item-asc" ${state.finSort === "item-asc" ? "selected" : ""}>Item: A to Z</option>
           </select>
+          <label class="fin-toggle"><input type="checkbox" id="fin-show-source" ${state.finShowSource ? "checked" : ""} /> Show who paid</label>
         </div>
         ${finTransactionTable(filtered, enrichMap)}
       </div>
@@ -1867,6 +1874,7 @@ function renderFinance() {
   $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
   $("#fin-sort-filter").addEventListener("change", (e) => { state.finSort = e.target.value; renderFinance(); });
+  $("#fin-show-source").addEventListener("change", (e) => { state.finShowSource = e.target.checked; renderFinance(); });
   const insightsToggle = $("#fin-insights-toggle");
   if (insightsToggle) insightsToggle.addEventListener("click", () => { state.finShowInsights = !state.finShowInsights; renderFinance(); });
   // Clicking the already-selected month clears the filter back to "All months".
@@ -1876,8 +1884,9 @@ function renderFinance() {
 
   $$(".fin-edit-btn[data-idx]").forEach((btn) => btn.addEventListener("click", () => {
     const idx = Number(btn.dataset.idx);
+    const source = btn.dataset.source;
     const tr = btn.closest("tr");
-    const row = finRows().find((r) => r.idx === idx);
+    const row = (source === "jangelo" ? finJangeloRows() : finRows()).find((r) => r.idx === idx);
     if (!row || !tr) return;
     const { itemCell, categoryCell, actionsCell } = finEditRowForm(row);
     const cells = tr.children;
@@ -1887,14 +1896,14 @@ function renderFinance() {
     tr.querySelector(".fin-edit-save").addEventListener("click", () => {
       const newItem = tr.querySelector(".fin-edit-item").value.trim();
       const newCategory = tr.querySelector(".fin-edit-category").value;
-      finSetOverride(idx, { item: newItem || row.item, category: newCategory });
+      finSetOverride(source, idx, { item: newItem || row.item, category: newCategory });
       renderFinance();
     });
     tr.querySelector(".fin-edit-cancel").addEventListener("click", () => renderFinance());
   }));
   $$(".fin-reset-override[data-idx]").forEach((btn) => btn.addEventListener("click", (e) => {
     e.stopPropagation();
-    finClearOverride(Number(btn.dataset.idx));
+    finClearOverride(btn.dataset.source, Number(btn.dataset.idx));
     renderFinance();
   }));
 }

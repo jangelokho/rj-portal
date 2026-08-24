@@ -557,9 +557,11 @@ body.mode-finance .finance-view { display: block; }
 .fin-insights-toggle:hover { background: var(--bg-card-alt); color: var(--text); }
 .fin-insights { margin-bottom: 20px; }
 
-.fin-toolbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.fin-toolbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
 .fin-toolbar select, .fin-toolbar input { padding: 7px 26px 7px 10px; font-size: 13px; }
 .fin-toolbar input[type="search"] { flex: 1; min-width: 140px; padding-right: 10px; }
+.fin-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; padding: 7px 10px; }
+.fin-toggle input[type="checkbox"] { padding: 0; }
 
 .fin-scroll { max-height: calc(100vh - 300px); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
 .fin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
