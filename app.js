@@ -1237,6 +1237,27 @@ const EXCLUDED_TRANSFERS = [
   { date: "2026-08-05", desc: "Wise Asia-Pacific — transfer to Jangelo (allowance-style, not a household expense)", amount: 1000.00 },
 ];
 
+// Days Ria logged ONE lump manual entry instead of each individual purchase — a
+// many-statement-rows-to-one-manual-row sum, which the pairwise matcher can't find
+// on its own (it only ever pairs one row to one row). Ria confirms these directly
+// rather than this being auto-detected — add more here as she lists them.
+// Verified: 50 + 64 + 9 + 15 + 37.5 + 36 + 68 + 58 = 337.50 exactly.
+const CONSOLIDATED_GROUPS = [
+  {
+    manualDate: "2026-08-22", manualItem: "pop toy art stuff", manualCost: 337.50,
+    members: [
+      { date: "2026-08-22", item: "PayNow – Pigeoncrafts", sgd: 50.00 },
+      { date: "2026-08-22", item: "PayNow – Wise Asia-Pacific", sgd: 64.00 },
+      { date: "2026-08-22", item: "PayNow transfer (personal)", sgd: 9.00 },
+      { date: "2026-08-22", item: "PayNow – Wise Asia-Pacific", sgd: 15.00 },
+      { date: "2026-08-22", item: "PayNow transfer (personal)", sgd: 37.50 },
+      { date: "2026-08-22", item: "PayNow transfer (personal)", sgd: 36.00 },
+      { date: "2026-08-22", item: "PayNow transfer (personal)", sgd: 68.00 },
+      { date: "2026-08-22", item: "PayNow transfer (personal)", sgd: 58.00 },
+    ],
+  },
+];
+
 function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
 function finManualRows() {
   return (window.MANUAL_TXNS || []).map(([date, item, category, cost, status], idx) => ({ date, item, category, cost, status, idx }));
@@ -1357,6 +1378,20 @@ function finReconcile() {
   tryMatch(0);
   tryMatch(4);
 
+  // Confirmed many-to-one groups (see CONSOLIDATED_GROUPS) — pull their member rows
+  // out of circulation before the pairwise passes below ever see them.
+  const consolidatedGroups = [];
+  for (const g of CONSOLIDATED_GROUPS) {
+    const rows = g.members
+      .map((mem) => statementRows.find((r) => r.date === mem.date && r.item === mem.item && Math.abs(r.sgd - mem.sgd) < 0.01 && !usedStatement.has(r.idx)))
+      .filter(Boolean);
+    const sum = rows.reduce((s, r) => s + r.sgd, 0);
+    for (const r of rows) usedStatement.add(r.idx);
+    const manualRow = manual.find((m) => m.date === g.manualDate && m.item === g.manualItem);
+    if (manualRow) usedManual.add(manualRow.idx);
+    consolidatedGroups.push({ ...g, rows, sum, manualRow, ok: Math.abs(sum - g.manualCost) < 0.01 });
+  }
+
   // Possible matches: still-unmatched pairs with the SAME exact amount, either
   // within 10 days outright, or further apart but sharing a real word — cuts most
   // of the pure-coincidence noise a same-amount-only widened window produces.
@@ -1380,6 +1415,37 @@ function finReconcile() {
         matched.push({ manual: best, statement: s, daysApart: bestDist, key });
       } else if (!state.finDismissed.has(key)) {
         possibleMatches.push({ manual: best, statement: s, daysApart: bestDist, key });
+      }
+    }
+  }
+
+  // Near-amount matches: same or next day, amount within 50 cents but NOT exact —
+  // Ria estimates/rounds when typing an amount by hand, so "Otou San $19.80" on the
+  // statement next to her own "otousan lunch zhongshan $19.50" is very likely the
+  // same meal. Lower confidence than the tiers above (the amount genuinely differs,
+  // not just the posting date), so these need a closer look before confirming.
+  const nearAmountUsedManual = new Set();
+  const possibleMatchesNearAmount = [];
+  for (const s of statementRows) {
+    if (usedStatement.has(s.idx)) continue;
+    let best = null, bestScore = Infinity;
+    for (const m of manual) {
+      if (usedManual.has(m.idx) || nearAmountUsedManual.has(m.idx)) continue;
+      const dd = finDaysApart(m.date, s.date);
+      if (dd > 1) continue;
+      const delta = Math.abs(m.cost - s.sgd);
+      if (delta < 0.01 || delta > 0.5) continue; // exact matches already handled above
+      const score = delta * 10 + dd;
+      if (score < bestScore) { bestScore = score; best = m; }
+    }
+    if (best) {
+      const key = `pmn|${s.idx}|${best.idx}`;
+      if (state.finConfirmed.has(key)) {
+        usedStatement.add(s.idx); usedManual.add(best.idx);
+        matched.push({ manual: best, statement: s, daysApart: finDaysApart(best.date, s.date), key });
+      } else if (!state.finDismissed.has(key)) {
+        nearAmountUsedManual.add(best.idx);
+        possibleMatchesNearAmount.push({ manual: best, statement: s, delta: Math.abs(best.cost - s.sgd), key });
       }
     }
   }
@@ -1438,11 +1504,11 @@ function finReconcile() {
     if (/^PayNow transfer \(personal\)$/i.test(p.statement.item)) enrichMap.set(p.statement.idx, p.manual.item);
   }
 
-  return { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleDuplicates, confirmedDuplicates, enrichMap };
+  return { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups, enrichMap };
 }
 
 function finConsolidatePanel(reconcile) {
-  const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleDuplicates, confirmedDuplicates } = reconcile;
+  const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups } = reconcile;
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
   const byIestin = manualOnly.length - byJangelo;
   // Ria stopped logging Bus/MRT rides by hand — those will always show up here and
@@ -1463,6 +1529,12 @@ function finConsolidatePanel(reconcile) {
         <div class="fin-kpi"><div class="fin-kpi-label">Missing from your log</div><div class="fin-kpi-value">${realMissing.length}</div><div class="fin-kpi-sub">${transportMissing.length} more are Bus/MRT — not logged by choice</div></div>
         <div class="fin-kpi"><div class="fin-kpi-label">Only in your log</div><div class="fin-kpi-value">${manualOnly.length}</div><div class="fin-kpi-sub">${byIestin} by you, ${byJangelo} by Jangelo</div></div>
       </div>
+      ${consolidatedGroups.length ? `
+      <h4 class="fin-sub-h">Consolidated days — several charges logged as one entry (${consolidatedGroups.length})</h4>
+      <ul class="fin-cc-list">
+        ${consolidatedGroups.map((g) => `
+          <li>${esc(finFmtDate(g.manualDate))} "${esc(g.manualItem)}" (${esc(finFmtSGD(g.manualCost))}) = ${g.rows.length} statement lines summing to ${esc(finFmtSGD(g.sum))}${g.ok ? "" : ` <strong>— doesn't add up, double check</strong>`}: ${g.rows.map((r) => `${esc(r.item)} ${esc(finFmtSGD(r.sgd))}`).join(", ")}</li>`).join("")}
+      </ul>` : ""}
       ${possibleMatches.length ? `
       <div class="fin-review-section" data-section="pm">
         <div class="fin-card-head">
@@ -1479,6 +1551,30 @@ function finConsolidatePanel(reconcile) {
                 <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
                 <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
                 <td>${p.daysApart}d</td>
+                <td class="fin-review-actions">
+                  <button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button>
+                  <button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button>
+                </td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
+      ${possibleMatchesNearAmount.length ? `
+      <div class="fin-review-section" data-section="pmn">
+        <div class="fin-card-head">
+          <h4 class="fin-sub-h">Possible matches — close in price (${possibleMatchesNearAmount.length})</h4>
+          <button class="btn-ghost fin-consolidate-all">Consolidate all shown</button>
+        </div>
+        <p class="fin-consolidate-note">Same or next day, amount within 50 cents but not exact — you likely rounded when typing it in by hand. Lower confidence than the tiers above, so look closely before confirming.</p>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table fin-review-table">
+            <thead><tr><th>Statement</th><th>Your log</th><th class="fin-num">Statement cost</th><th class="fin-num">Your log cost</th><th></th></tr></thead>
+            <tbody>${possibleMatchesNearAmount.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
+                <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
+                <td class="fin-num">${esc(finFmtSGD(p.manual.cost))}</td>
                 <td class="fin-review-actions">
                   <button class="fin-confirm-btn" data-key="${esc(p.key)}">Confirm</button>
                   <button class="fin-dismiss-btn" data-key="${esc(p.key)}">Split — different purchase</button>

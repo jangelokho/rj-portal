@@ -227,7 +227,7 @@ const BANK_TXNS = [
   ["2026-05-15", "PayLah! top-up", "Food", 17.96],
   ["2026-05-15", "PayNow – The Rare Honey Co.", "Food", 7.00],
   ["2026-05-16", "I-Bank transfer", "Other", 100.00],
-  ["2026-05-16", "ATM withdrawal – Shaw Centre", "Other", 500.00],
+  ["2026-05-16", "Mama Siensi Allowance + Cash on Hand", "Other", 500.00],
   ["2026-05-16", "PayLah! top-up", "Food", 5.00],
   ["2026-05-16", "The Cheese Shop, UE Square", "Groceries/Supplies", 32.00],
   ["2026-05-16", "Insurgence HQ – Chimicha", "Food", 18.00],
