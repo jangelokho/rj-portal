@@ -1041,6 +1041,114 @@ function finTransactionTable(rows) {
     </div>`;
 }
 
+// ---------- Consolidate: reconcile the statement-derived data against Ria's manual log ----------
+state.finShowConsolidate = false;
+
+// Rounded-up Citibank card payments, found as "BILL CCC" lines in the DBS history —
+// excluded from FINANCE_TXNS itself (they'd double-count the card's own itemized
+// purchases) but surfaced here since Ria asked whether she'd separately logged the
+// payment itself.
+const CC_BILL_PAYMENTS = [
+  { date: "2026-07-07", desc: "Citibank card payment — settles the Jun statement ($79.50 balance)", amount: 80.00 },
+  { date: "2026-08-07", desc: "Citibank card payment — settles the Jul statement ($779.54 balance)", amount: 780.00 },
+];
+
+function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
+function finManualRows() {
+  return (window.MANUAL_TXNS || []).map(([date, item, category, cost, status]) => ({ date, item, category, cost, status }));
+}
+
+// Two passes, tightest first: same date + same amount, then within 4 days + same
+// amount. Ria logs a few days late/early relative to the actual posting date, so a
+// same-day-only match misses a lot of real matches — see the reconcile.mjs analysis
+// this was validated against (144 -> 194 matched once the window opened to 4 days).
+function finReconcile() {
+  const statementRows = finRows();
+  const manual = finManualRows();
+  const usedStatement = new Set();
+  const matched = [];
+  function tryMatch(maxDays) {
+    for (const m of manual) {
+      if (m._matched) continue;
+      let best = null, bestDist = Infinity;
+      for (let i = 0; i < statementRows.length; i++) {
+        if (usedStatement.has(i)) continue;
+        const s = statementRows[i];
+        if (Math.abs(s.sgd - m.cost) > 0.01) continue;
+        const dd = finDaysApart(s.date, m.date);
+        if (dd > maxDays) continue;
+        if (dd < bestDist) { bestDist = dd; best = i; }
+      }
+      if (best != null) { usedStatement.add(best); m._matched = true; matched.push({ manual: m, statement: statementRows[best], daysApart: bestDist }); }
+    }
+  }
+  tryMatch(0);
+  tryMatch(4);
+  const manualOnly = manual.filter((m) => !m._matched);
+  const statementOnly = statementRows.filter((_, i) => !usedStatement.has(i));
+  const ccBillPayments = CC_BILL_PAYMENTS.map((p) => ({
+    ...p,
+    manualMatch: manual.find((m) => Math.abs(m.cost - p.amount) <= 0.5 && finDaysApart(m.date, p.date) <= 10) || null,
+  }));
+  return { matched, manualOnly, statementOnly, ccBillPayments };
+}
+
+function finConsolidatePanel() {
+  const { matched, manualOnly, statementOnly, ccBillPayments } = finReconcile();
+  const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
+  const byIestin = manualOnly.length - byJangelo;
+  const sortedStatementOnly = [...statementOnly].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const sortedMatched = [...matched].sort((a, b) => a.manual.date < b.manual.date ? -1 : a.manual.date > b.manual.date ? 1 : 0);
+
+  return `
+    <div class="fin-card">
+      <h3>Consolidate with your manual log</h3>
+      <p class="fin-consolidate-note">Matches your RJ Bahay sheet against these statements by date (within 4 days) and exact amount. Entries paid by Jangelo won't match here — they're not on your own card or bank account, so that's expected, not a miss.</p>
+      <div class="fin-kpis">
+        <div class="fin-kpi"><div class="fin-kpi-label">Matched</div><div class="fin-kpi-value">${matched.length}</div><div class="fin-kpi-sub">same purchase, already logged</div></div>
+        <div class="fin-kpi"><div class="fin-kpi-label">Missing from your log</div><div class="fin-kpi-value">${statementOnly.length}</div><div class="fin-kpi-sub">on your statements, not logged yet</div></div>
+        <div class="fin-kpi"><div class="fin-kpi-label">Only in your log</div><div class="fin-kpi-value">${manualOnly.length}</div><div class="fin-kpi-sub">${byIestin} by you, ${byJangelo} by Jangelo</div></div>
+      </div>
+      <h4 class="fin-sub-h">Credit card bill payments</h4>
+      <ul class="fin-cc-list">
+        ${ccBillPayments.map((p) => `
+          <li>${esc(finFmtDate(p.date))} — ${esc(p.desc)}, ${esc(finFmtSGD(p.amount))}:
+            ${p.manualMatch
+              ? `<strong>found in your log</strong> (${esc(finFmtDate(p.manualMatch.date))} "${esc(p.manualMatch.item)}")`
+              : `<strong>not in your log</strong> — you likely haven't logged the payment itself, only the individual purchases it covers`}
+          </li>`).join("")}
+      </ul>
+      <h4 class="fin-sub-h">Missing from your log (${statementOnly.length})</h4>
+      <div class="fin-scroll" style="max-height:320px;">
+        <table class="fin-table">
+          <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th></tr></thead>
+          <tbody>${sortedStatementOnly.map((r) => `
+            <tr>
+              <td>${esc(finFmtDate(r.date))}</td>
+              <td>${esc(r.item)}</td>
+              <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
+              <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>
+      <details class="fin-details">
+        <summary>Matched pairs (${matched.length}) — same purchase, logged once</summary>
+        <div class="fin-scroll" style="max-height:320px;">
+          <table class="fin-table">
+            <thead><tr><th>Your log</th><th>Statement</th><th class="fin-num">Cost</th><th>Gap</th></tr></thead>
+            <tbody>${sortedMatched.map((p) => `
+              <tr>
+                <td>${esc(finFmtDate(p.manual.date))} "${esc(p.manual.item)}"</td>
+                <td>${esc(finFmtDate(p.statement.date))} "${esc(p.statement.item)}"</td>
+                <td class="fin-num">${esc(finFmtSGD(p.statement.sgd))}</td>
+                <td>${p.daysApart === 0 ? "same day" : `${p.daysApart}d`}</td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </details>
+    </div>`;
+}
+
 function renderFinance() {
   const all = finRows();
   const agg = finAggregate(all);
@@ -1055,9 +1163,15 @@ function renderFinance() {
 
   $("#finance-view").innerHTML = `
     <div class="fin-head">
-      <h2>Finances — Singapore</h2>
-      <p>${esc(rangeLabel)} · Citibank credit card + DBS/POSB account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
+      <div class="fin-head-row">
+        <div>
+          <h2>Finances — Singapore</h2>
+          <p>${esc(rangeLabel)} · Citibank credit card + DBS/POSB account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
+        </div>
+        ${window.MANUAL_TXNS ? `<button id="fin-consolidate-btn" class="btn-ghost">${state.finShowConsolidate ? "Hide" : "Consolidate with manual log"}</button>` : ""}
+      </div>
     </div>
+    ${state.finShowConsolidate && window.MANUAL_TXNS ? finConsolidatePanel() : ""}
     <div class="fin-kpis">
       <div class="fin-kpi"><div class="fin-kpi-label">Total spend</div><div class="fin-kpi-value">${esc(finFmtSGD(agg.total))}</div><div class="fin-kpi-sub">${esc(finFmtPHP(agg.total))}</div></div>
       <div class="fin-kpi"><div class="fin-kpi-label">Transactions</div><div class="fin-kpi-value">${all.length}</div><div class="fin-kpi-sub">${months.length} months</div></div>
@@ -1104,6 +1218,8 @@ function renderFinance() {
   });
   $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
+  const consolidateBtn = $("#fin-consolidate-btn");
+  if (consolidateBtn) consolidateBtn.addEventListener("click", () => { state.finShowConsolidate = !state.finShowConsolidate; renderFinance(); });
 }
 
 // ---------- boot ----------
