@@ -1608,8 +1608,11 @@ function finJangeloRows() {
 // Small muted tag so a statement row's source is visible once merged — hidden by
 // default (Ria found it cluttered) behind the "Show who paid" toggle.
 function finSourceTag(r) {
-  if (r.source === "manual" && state.finShowSource) return ` <span class="fin-edited-tag">· from your log, not a statement</span>`;
-  return r.source === "jangelo" && state.finShowSource ? ` <span class="fin-edited-tag">· Jangelo</span>` : "";
+  if (!state.finShowSource) return "";
+  if (r.source === "manual") return ` <span class="fin-edited-tag">· from your log, not a statement</span>`;
+  if (r.source === "jangelo") return ` <span class="fin-edited-tag">· Jangelo</span>`;
+  if (r.source === "ria") return ` <span class="fin-edited-tag">· Ria</span>`;
+  return "";
 }
 function finConsolidatePanel(reconcile) {
   const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups } = reconcile;
