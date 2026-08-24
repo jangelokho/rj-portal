@@ -1,10 +1,14 @@
 // Jangelo's Wise SGD account statements (2026-04-01 to 2026-08-24), parsed from the
 // two xlsx exports. Same shape as FINANCE_TXNS: [date, item, category, sgd].
-// Excluded: PHP->SGD conversions (his own money moving accounts, not a purchase),
-// and the two "Received money from ..." deposits (the $1000 from Ria — already
-// excluded on her side as an allowance transfer — and $100 from Alyssa Karin Pang,
-// a repayment/gift, not a purchase).
+// Excluded: the two "Received money from ..." deposits (the $1000 from Ria —
+// already excluded on her side as an allowance transfer — and $100 from Alyssa
+// Karin Pang, a repayment/gift, not a purchase).
+// PHP -> SGD conversions ARE included below (per Ria) — his PHP savings/income
+// funding the SGD account counts as household expense from the PH side, even
+// though it shows as a credit in this SGD account.
 window.JANGELO_TXNS = [
+  ["2026-04-15", "PHP → SGD conversion (₱141,716.38 → S$3,000.00)", "Other", 3000.00],
+  ["2026-06-04", "PHP → SGD conversion (₱80,000.00 → S$1,662.03)", "Other", 1662.03],
   ["2026-04-01", "Juwei Old Nanyang Coffees", "Food", 7.09],
   ["2026-04-02", "Kopitiam @vivo", "Food", 12.5],
   ["2026-04-02", "Kopitiam @vivo", "Food", 6.0],
