@@ -1178,6 +1178,13 @@ const CC_BILL_PAYMENTS = [
   { date: "2026-08-07", desc: "Citibank card payment — settles the Jul statement ($779.54 balance)", amount: 780.00 },
 ];
 
+// Real money out of the DBS account, deliberately left out of FINANCE_TXNS because
+// it isn't a household expense — kept visible here (same treatment as the CC bill
+// payments above) rather than disappearing entirely.
+const EXCLUDED_TRANSFERS = [
+  { date: "2026-08-05", desc: "Wise Asia-Pacific — transfer to Jangelo (allowance-style, not a household expense)", amount: 1000.00 },
+];
+
 function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
 function finManualRows() {
   return (window.MANUAL_TXNS || []).map(([date, item, category, cost, status]) => ({ date, item, category, cost, status }));
@@ -1211,15 +1218,17 @@ function finReconcile() {
   tryMatch(4);
   const manualOnly = manual.filter((m) => !m._matched);
   const statementOnly = statementRows.filter((_, i) => !usedStatement.has(i));
-  const ccBillPayments = CC_BILL_PAYMENTS.map((p) => ({
+  const withManualMatch = (list) => list.map((p) => ({
     ...p,
     manualMatch: manual.find((m) => Math.abs(m.cost - p.amount) <= 0.5 && finDaysApart(m.date, p.date) <= 10) || null,
   }));
-  return { matched, manualOnly, statementOnly, ccBillPayments };
+  const ccBillPayments = withManualMatch(CC_BILL_PAYMENTS);
+  const excludedTransfers = withManualMatch(EXCLUDED_TRANSFERS);
+  return { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers };
 }
 
 function finConsolidatePanel() {
-  const { matched, manualOnly, statementOnly, ccBillPayments } = finReconcile();
+  const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers } = finReconcile();
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
   const byIestin = manualOnly.length - byJangelo;
   const sortedStatementOnly = [...statementOnly].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
@@ -1243,6 +1252,15 @@ function finConsolidatePanel() {
               : `<strong>not in your log</strong> — you likely haven't logged the payment itself, only the individual purchases it covers`}
           </li>`).join("")}
       </ul>
+      ${excludedTransfers.length ? `
+      <h4 class="fin-sub-h">Other excluded transfers</h4>
+      <p class="fin-consolidate-note">Real money out of the account, but not counted in the Finances totals above — kept visible here instead of just disappearing.</p>
+      <ul class="fin-cc-list">
+        ${excludedTransfers.map((p) => `
+          <li>${esc(finFmtDate(p.date))} — ${esc(p.desc)}, ${esc(finFmtSGD(p.amount))}${
+            p.manualMatch ? ` — <strong>found in your log</strong> (${esc(finFmtDate(p.manualMatch.date))} "${esc(p.manualMatch.item)}")` : ""
+          }</li>`).join("")}
+      </ul>` : ""}
       <h4 class="fin-sub-h">Missing from your log (${statementOnly.length})</h4>
       <div class="fin-scroll" style="max-height:320px;">
         <table class="fin-table">
