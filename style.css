@@ -497,6 +497,7 @@ body {
   --fin-c-transport: #199e70;  /* aqua */
   --fin-c-shopping: #c98500;   /* yellow */
   --fin-c-rent: #d55181;       /* magenta */
+  --fin-c-utilities: #b08355;  /* tan/brown */
   --fin-c-entertainment: #008300; /* green */
   --fin-c-medicine: #9085e9;   /* violet */
   --fin-c-other: #e66767;      /* red */
@@ -512,6 +513,7 @@ body {
   --fin-c-transport: #1baf7a;
   --fin-c-shopping: #eda100;
   --fin-c-rent: #e87ba4;
+  --fin-c-utilities: #96693c;
   --fin-c-entertainment: #008300;
   --fin-c-medicine: #4a3aa7;
   --fin-c-other: #e34948;

@@ -879,7 +879,7 @@ state.finShowSource = false; // whether the "· Jangelo" tag is shown on his row
 
 const FIN_CATEGORY_ORDER = [
   "Food", "Groceries/Supplies", "Transportation", "Shopping",
-  "Rent", "Entertainment", "Medicine/Health", "Other",
+  "Rent", "Utilities", "Entertainment", "Medicine/Health", "Other",
 ];
 const FIN_CATEGORY_COLOR = {
   "Food": "--fin-c-food",
@@ -887,6 +887,7 @@ const FIN_CATEGORY_COLOR = {
   "Transportation": "--fin-c-transport",
   "Shopping": "--fin-c-shopping",
   "Rent": "--fin-c-rent",
+  "Utilities": "--fin-c-utilities",
   "Entertainment": "--fin-c-entertainment",
   "Medicine/Health": "--fin-c-medicine",
   "Other": "--fin-c-other",
