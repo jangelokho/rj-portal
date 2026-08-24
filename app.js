@@ -914,8 +914,17 @@ $$("#mode-switch .mode-btn").forEach((b) => {
 function finRows() {
   return (window.FINANCE_TXNS || []).map(([date, item, category, sgd], idx) => {
     const ov = (state.finOverrides || {})[idx];
-    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov };
+    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "ria" };
   });
+}
+// Ria's + Jangelo's statements together — the "most true expenses in SG" picture,
+// per Ria, since it's what actually left an account rather than what made it into
+// the (incomplete, sometimes-duplicated) manual log. Used by Overview specifically;
+// Consolidate and Income vs Expenses stay scoped to finRows()/finJangeloRows() on
+// their own, since those are about reconciling or paying against ONE person's
+// income, not the combined total.
+function finHouseholdRows() {
+  return [...finRows(), ...finJangeloRows().map((r) => ({ ...r, source: "jangelo" }))];
 }
 function finFmtSGD(n) {
   const sign = n < 0 ? "-" : "";
@@ -1041,7 +1050,7 @@ function finMonthlySummaryTable(byMonth, total, selectedMonth) {
 
 function finFilteredRows() {
   const q = state.finSearch.trim().toLowerCase();
-  const all = finRows();
+  const all = finHouseholdRows();
   return all.filter((r) => {
     if (state.finCategory !== "all" && r.category !== state.finCategory) return false;
     if (state.finMonth !== "all" && r.date.slice(0, 7) !== state.finMonth) return false;
@@ -1058,16 +1067,19 @@ function finTransactionTable(rows, enrichMap) {
       <table class="fin-table">
         <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="fin-num">Cost</th><th></th></tr></thead>
         <tbody>${sorted.map((r) => {
+          const isJangelo = r.source === "jangelo";
           // Prefer the manual log's item text over a statement line that's just the
-          // payment rail with no merchant name (a masked PayNow recipient, etc.).
-          const displayItem = (enrichMap && enrichMap.get(r.idx)) || r.item;
+          // payment rail with no merchant name (a masked PayNow recipient, etc.) —
+          // enrichment/editing only exist for Ria's own rows so far.
+          const displayItem = (!isJangelo && enrichMap && enrichMap.get(r.idx)) || r.item;
+          const sourceTag = isJangelo ? ` <span class="fin-edited-tag">· Jangelo</span>` : "";
           return `
           <tr data-idx="${r.idx}">
             <td>${esc(finFmtDate(r.date))}</td>
-            <td>${esc(displayItem)}${r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.idx}">reset</button>)</span>` : ""}</td>
+            <td>${esc(displayItem)}${sourceTag}${!isJangelo && r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.idx}">reset</button>)</span>` : ""}</td>
             <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
             <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
-            <td><button class="fin-edit-btn" data-idx="${r.idx}">Edit</button></td>
+            <td>${isJangelo ? "" : `<button class="fin-edit-btn" data-idx="${r.idx}">Edit</button>`}</td>
           </tr>`;
         }).join("")}</tbody>
       </table>
@@ -1925,7 +1937,7 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
 }
 
 function renderFinance() {
-  const all = finRows();
+  const all = finHouseholdRows();
   const agg = finAggregate(all);
   const filtered = finFilteredRows();
   const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
@@ -1951,7 +1963,7 @@ function renderFinance() {
   $("#finance-view").innerHTML = `
     <div class="fin-head">
       <h2>Finances — Singapore</h2>
-      <p>${esc(rangeLabel)} · Citibank credit card + DBS/POSB account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
+      <p>${esc(rangeLabel)} · Ria's Citibank + DBS/POSB and Jangelo's Wise SGD account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
     </div>
     <div class="fin-tabs">
       <button class="fin-tab-btn ${state.finTab === "overview" ? "selected" : ""}" data-tab="overview">Overview</button>
