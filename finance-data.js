@@ -11,6 +11,8 @@
 //    double it.
 //  - "MONEYSEND CORRAL RIA IEST…" credits on the card statements — Ria paying down
 //    her own card from her own bank account, not a purchase.
+//  - The 2026-08-05 PayNow – Wise Asia-Pacific, S$1,000.00 — an allowance-style
+//    transfer to Jangelo, not a household expense.
 //
 // Each row: [date (YYYY-MM-DD), item, category, amount in SGD]. A negative amount is
 // a refund/reversal that nets against that category's total, exactly as it appears on
@@ -158,7 +160,7 @@ const BANK_TXNS = [
   ["2026-04-23", "PayLah! top-up", "Food", 17.80],
   ["2026-04-23", "PayLah! top-up", "Food", 4.20],
   ["2026-04-24", "PayLah! top-up", "Food", 24.00],
-  ["2026-04-25", "368 Thomson electricity & water", "Rent", 100.00],
+  ["2026-04-25", "Shopee purchase (via MariBank)", "Shopping", 100.00],
   ["2026-04-25", "PayLah! top-up", "Food", 81.25],
   ["2026-04-25", "PayLah! top-up", "Food", 13.89],
   ["2026-04-25", "PayLah! top-up", "Food", 35.70],
@@ -367,7 +369,8 @@ const BANK_TXNS = [
   ["2026-08-03", "NETS QR – Playyard", "Shopping", 17.90],
   ["2026-08-04", "Yong Seng Heng Centre Kitchen", "Food", 10.00],
   ["2026-08-05", "Yong Seng Heng Centre Kitchen", "Food", 8.50],
-  ["2026-08-05", "PayNow – Wise Asia-Pacific", "Other", 1000.00],
+  // 2026-08-05 PayNow – Wise Asia-Pacific, S$1,000.00 excluded on purpose — Ria's
+  // allowance-style transfer to Jangelo, not a household expense.
   ["2026-08-05", "Yong Seng Heng Food Industry", "Food", 1.80],
   ["2026-08-09", "Yong Seng Heng Food Industry", "Food", 3.60],
   ["2026-08-10", "Yong Seng Heng Centre Kitchen", "Food", 11.50],
