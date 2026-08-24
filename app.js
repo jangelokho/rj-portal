@@ -1298,6 +1298,10 @@ const CONFIRMED_PAIRS = [
     statementDate: "2026-08-01", statementItem: "Tiong Bahru Bakery", statementSgd: 16.79,
     manualDate: "2026-08-01", manualItem: "tiong bahru bakery",
   },
+  {
+    statementDate: "2026-04-15", statementItem: "Zheng Yan", statementSgd: 2400.0,
+    manualDate: "2026-04-23", manualItem: "368 thomson rent - april 2026",
+  },
 ];
 
 function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
