@@ -1041,8 +1041,133 @@ function finTransactionTable(rows) {
     </div>`;
 }
 
+// ---------- Smart summary: everyday vs one-off vs transfers ----------
+const EVERYDAY_CATEGORIES = ["Food", "Groceries/Supplies", "Transportation"];
+const DISCRETIONARY_CATEGORIES = ["Shopping", "Entertainment", "Medicine/Health"];
+
+// Some "Other"-category rows are really transfers between accounts/people (Wise, ATM
+// cash, bank-to-bank, a large one-off PayNow to a named person) rather than
+// consumption — left inside "Other" for the main table since that's still the truest
+// category, but split out here so one big transfer doesn't read as a spending spike.
+function finIsTransferLike(row) {
+  if (row.category !== "Other") return false;
+  if (/wise|atm withdrawal|i-bank transfer|maribank/i.test(row.item)) return true;
+  return row.sgd >= 200;
+}
+function finBucket(row) {
+  if (row.category === "Rent") return "rent";
+  if (EVERYDAY_CATEGORIES.includes(row.category)) return "everyday";
+  if (DISCRETIONARY_CATEGORIES.includes(row.category)) return "discretionary";
+  if (finIsTransferLike(row)) return "transfer";
+  return "misc";
+}
+function finBucketBreakdown(rows) {
+  const out = { rent: 0, everyday: 0, discretionary: 0, transfer: 0, misc: 0 };
+  for (const r of rows) out[finBucket(r)] += r.sgd;
+  return out;
+}
+
+// Auto-generated from real numbers each render — not a live AI call, just template
+// sentences over computed aggregates. Explains whichever month is the spending peak
+// (today that's August) rather than hardcoding which month to call out.
+function finInsights(all, byMonth) {
+  const months = Object.keys(byMonth).sort();
+  if (!months.length) return "";
+  const totals = months.map((m) => ({ m, total: byMonth[m].reduce((s, r) => s + r.sgd, 0) }));
+  const top = totals.reduce((a, b) => (b.total > a.total ? b : a));
+  const others = totals.filter((t) => t.m !== top.m);
+  const othersAvg = others.length ? others.reduce((s, t) => s + t.total, 0) / others.length : 0;
+  const topRows = byMonth[top.m];
+  const overallTotal = all.reduce((s, r) => s + r.sgd, 0);
+  const bucket = finBucketBreakdown(all);
+  const bucketTop = finBucketBreakdown(topRows);
+  const biggest = [...topRows].sort((a, b) => b.sgd - a.sgd).slice(0, 5);
+  const biggestSum = biggest.reduce((s, r) => s + r.sgd, 0);
+  const pct = (n) => (overallTotal ? ((n / overallTotal) * 100).toFixed(0) : "0");
+
+  const catFlags = [];
+  for (const cat of FIN_CATEGORY_ORDER) {
+    const topVal = topRows.filter((r) => r.category === cat).reduce((s, r) => s + r.sgd, 0);
+    const otherVals = others.map((t) => byMonth[t.m].filter((r) => r.category === cat).reduce((s, r) => s + r.sgd, 0));
+    const otherAvg = otherVals.length ? otherVals.reduce((s, v) => s + v, 0) / otherVals.length : 0;
+    if (topVal > 0 && otherAvg > 0 && topVal > otherAvg * 1.3 && topVal - otherAvg > 100) catFlags.push({ cat, topVal, otherAvg });
+  }
+
+  return `
+    <div class="fin-card fin-insights">
+      <h3>Smart summary</h3>
+      <p>Across ${months.length} months (${esc(finFmtMonth(months[0]))}–${esc(finFmtMonth(months[months.length - 1]))}) that's <strong>${esc(finFmtSGD(overallTotal))}</strong> total. Split by what it actually is: <strong>${esc(finFmtSGD(bucket.rent))}</strong> rent (${pct(bucket.rent)}%), <strong>${esc(finFmtSGD(bucket.everyday))}</strong> everyday food/groceries/transport (${pct(bucket.everyday)}%), <strong>${esc(finFmtSGD(bucket.discretionary))}</strong> discretionary shopping/entertainment/health (${pct(bucket.discretionary)}%), and <strong>${esc(finFmtSGD(bucket.transfer))}</strong> transfers or cash movement between accounts — not day-to-day spending (${pct(bucket.transfer)}%).</p>
+      <p><strong>${esc(finFmtMonth(top.m))}</strong> is your highest month at <strong>${esc(finFmtSGD(top.total))}</strong>${othersAvg ? `, ${(((top.total - othersAvg) / othersAvg) * 100).toFixed(0)}% above the ${esc(finFmtSGD(othersAvg))} average of the other months` : ""}. Its 5 biggest transactions alone are ${esc(finFmtSGD(biggestSum))} (${top.total ? ((biggestSum / top.total) * 100).toFixed(0) : 0}% of the month):</p>
+      <ul class="fin-insight-list">
+        ${biggest.map((r) => `<li>${esc(finFmtDate(r.date))} — ${esc(r.item)}, ${esc(finFmtSGD(r.sgd))}</li>`).join("")}
+      </ul>
+      ${catFlags.length ? `<p>Worth a second look: ${catFlags.map((f) => `<strong>${esc(f.cat)}</strong> ran ${esc(finFmtSGD(f.topVal))} vs a usual ${esc(finFmtSGD(f.otherAvg))}`).join("; ")} — check neither is a duplicate or unexpected charge.</p>` : ""}
+      ${bucketTop.transfer > 0 ? `<p class="fin-consolidate-note">${esc(finFmtSGD(bucketTop.transfer))} of ${esc(finFmtMonth(top.m))}'s total is transfers (Wise, ATM cash, bank-to-bank), not spending — the real day-to-day increase is smaller than the headline number suggests.</p>` : ""}
+    </div>`;
+}
+
+// ---------- Income vs Expenses ----------
+function finIncomeRows() {
+  return (window.INCOME_TXNS || []).map(([date, item, sgd]) => ({ date, item, sgd }));
+}
+
+function finIncomeExpenseTab() {
+  const income = finIncomeRows();
+  const expenses = finRows();
+  const months = [...new Set([...income.map((r) => r.date.slice(0, 7)), ...expenses.map((r) => r.date.slice(0, 7))])].sort();
+  const incomeByMonth = {}, expenseByMonth = {};
+  for (const r of income) incomeByMonth[r.date.slice(0, 7)] = (incomeByMonth[r.date.slice(0, 7)] || 0) + r.sgd;
+  for (const r of expenses) expenseByMonth[r.date.slice(0, 7)] = (expenseByMonth[r.date.slice(0, 7)] || 0) + r.sgd;
+  const totalIncome = income.reduce((s, r) => s + r.sgd, 0);
+  const totalExpense = expenses.reduce((s, r) => s + r.sgd, 0);
+  const net = totalIncome - totalExpense;
+  const maxVal = Math.max(1, ...months.map((m) => Math.max(incomeByMonth[m] || 0, expenseByMonth[m] || 0)));
+  const netColor = (n) => (n >= 0 ? "var(--ok)" : "var(--danger)");
+
+  return `
+    <div class="fin-kpis">
+      <div class="fin-kpi"><div class="fin-kpi-label">Total income</div><div class="fin-kpi-value">${esc(finFmtSGD(totalIncome))}</div><div class="fin-kpi-sub">${esc(finFmtPHP(totalIncome))}</div></div>
+      <div class="fin-kpi"><div class="fin-kpi-label">Total expenses</div><div class="fin-kpi-value">${esc(finFmtSGD(totalExpense))}</div><div class="fin-kpi-sub">${esc(finFmtPHP(totalExpense))}</div></div>
+      <div class="fin-kpi"><div class="fin-kpi-label">Net</div><div class="fin-kpi-value" style="color:${netColor(net)}">${net >= 0 ? "+" : ""}${esc(finFmtSGD(net))}</div><div class="fin-kpi-sub">${net >= 0 ? "saved" : "over"} across ${months.length} months</div></div>
+      <div class="fin-kpi"><div class="fin-kpi-label">Savings rate</div><div class="fin-kpi-value">${totalIncome ? ((net / totalIncome) * 100).toFixed(0) : 0}%</div><div class="fin-kpi-sub">of income kept</div></div>
+    </div>
+    <div class="fin-card">
+      <h3>Income vs expenses, by month</h3>
+      <p class="fin-consolidate-note">Income is bucketed by the month it landed in your DBS account — HitPay pays in arrears (the Aug credit is for July's work), not the month it was earned.</p>
+      <div class="fin-ie-chart">
+        ${months.map((m) => {
+          const inc = incomeByMonth[m] || 0, exp = expenseByMonth[m] || 0;
+          const incH = inc ? Math.max(2, (inc / maxVal) * 100) : 0;
+          const expH = exp ? Math.max(2, (exp / maxVal) * 100) : 0;
+          const monthNet = inc - exp;
+          return `
+            <div class="fin-ie-col" title="${esc(finFmtMonth(m))}: income ${esc(finFmtSGD(inc))}, expenses ${esc(finFmtSGD(exp))}">
+              <div class="fin-ie-bars">
+                <div class="fin-ie-bar fin-ie-income" style="height:${incH}%"></div>
+                <div class="fin-ie-bar fin-ie-expense" style="height:${expH}%"></div>
+              </div>
+              <div class="fin-ie-net" style="color:${netColor(monthNet)}">${monthNet >= 0 ? "+" : ""}${finFmtSGD(monthNet).replace("S$", "")}</div>
+              <div class="fin-ie-label">${esc(finFmtMonthShort(m))}</div>
+            </div>`;
+        }).join("")}
+      </div>
+      <div class="fin-ie-legend">
+        <span><span class="fin-cat-swatch" style="background:var(--ok)"></span>Income</span>
+        <span><span class="fin-cat-swatch" style="background:var(--danger)"></span>Expenses</span>
+      </div>
+      <table class="fin-summary-table">
+        <thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Net</th></tr></thead>
+        <tbody>${months.map((m) => {
+          const inc = incomeByMonth[m] || 0, exp = expenseByMonth[m] || 0, n = inc - exp;
+          return `<tr><td>${esc(finFmtMonth(m))}</td><td class="fin-num">${esc(finFmtSGD(inc))}</td><td class="fin-num">${esc(finFmtSGD(exp))}</td><td class="fin-num" style="color:${netColor(n)}">${n >= 0 ? "+" : ""}${esc(finFmtSGD(n))}</td></tr>`;
+        }).join("")}</tbody>
+        <tfoot><tr><td>Total</td><td class="fin-num">${esc(finFmtSGD(totalIncome))}</td><td class="fin-num">${esc(finFmtSGD(totalExpense))}</td><td class="fin-num" style="color:${netColor(net)}">${net >= 0 ? "+" : ""}${esc(finFmtSGD(net))}</td></tr></tfoot>
+      </table>
+    </div>`;
+}
+
 // ---------- Consolidate: reconcile the statement-derived data against Ria's manual log ----------
-state.finShowConsolidate = false;
+state.finTab = "overview"; // 'overview' | 'income' | 'consolidate'
 
 // Rounded-up Citibank card payments, found as "BILL CCC" lines in the DBS history —
 // excluded from FINANCE_TXNS itself (they'd double-count the card's own itemized
@@ -1149,29 +1274,15 @@ function finConsolidatePanel() {
     </div>`;
 }
 
-function renderFinance() {
-  const all = finRows();
-  const agg = finAggregate(all);
-  const filtered = finFilteredRows();
-  const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
-  const months = Object.keys(agg.byMonth).sort();
-  const rangeLabel = agg.minDate && agg.maxDate ? `${finFmtDate(agg.minDate)} – ${finFmtDate(agg.maxDate)}` : "";
-
+function finOverviewTab(all, agg, filtered, filteredTotal, months) {
   const monthOptions = months.map((m) => `<option value="${m}" ${state.finMonth === m ? "selected" : ""}>${esc(finFmtMonth(m))}</option>`).join("");
   const categoryOptions = FIN_CATEGORY_ORDER.filter((c) => agg.byCategory[c])
     .map((c) => `<option value="${c}" ${state.finCategory === c ? "selected" : ""}>${esc(c)}</option>`).join("");
+  const byMonth = {};
+  for (const r of all) (byMonth[r.date.slice(0, 7)] ||= []).push(r);
 
-  $("#finance-view").innerHTML = `
-    <div class="fin-head">
-      <div class="fin-head-row">
-        <div>
-          <h2>Finances — Singapore</h2>
-          <p>${esc(rangeLabel)} · Citibank credit card + DBS/POSB account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
-        </div>
-        ${window.MANUAL_TXNS ? `<button id="fin-consolidate-btn" class="btn-ghost">${state.finShowConsolidate ? "Hide" : "Consolidate with manual log"}</button>` : ""}
-      </div>
-    </div>
-    ${state.finShowConsolidate && window.MANUAL_TXNS ? finConsolidatePanel() : ""}
+  return `
+    ${finInsights(all, byMonth)}
     <div class="fin-kpis">
       <div class="fin-kpi"><div class="fin-kpi-label">Total spend</div><div class="fin-kpi-value">${esc(finFmtSGD(agg.total))}</div><div class="fin-kpi-sub">${esc(finFmtPHP(agg.total))}</div></div>
       <div class="fin-kpi"><div class="fin-kpi-label">Transactions</div><div class="fin-kpi-value">${all.length}</div><div class="fin-kpi-sub">${months.length} months</div></div>
@@ -1206,7 +1317,41 @@ function renderFinance() {
         </div>
       </div>
     </div>`;
+}
 
+function renderFinance() {
+  const all = finRows();
+  const agg = finAggregate(all);
+  const filtered = finFilteredRows();
+  const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
+  const months = Object.keys(agg.byMonth).sort();
+  const rangeLabel = agg.minDate && agg.maxDate ? `${finFmtDate(agg.minDate)} – ${finFmtDate(agg.maxDate)}` : "";
+
+  const hasManual = !!window.MANUAL_TXNS;
+  if (state.finTab === "consolidate" && !hasManual) state.finTab = "overview";
+  const tabContent = state.finTab === "income" ? finIncomeExpenseTab()
+    : state.finTab === "consolidate" ? finConsolidatePanel()
+    : finOverviewTab(all, agg, filtered, filteredTotal, months);
+
+  $("#finance-view").innerHTML = `
+    <div class="fin-head">
+      <h2>Finances — Singapore</h2>
+      <p>${esc(rangeLabel)} · Citibank credit card + DBS/POSB account · ${all.length} transactions · ${esc(window.FX_NOTE || "")}</p>
+    </div>
+    <div class="fin-tabs">
+      <button class="fin-tab-btn ${state.finTab === "overview" ? "selected" : ""}" data-tab="overview">Overview</button>
+      <button class="fin-tab-btn ${state.finTab === "income" ? "selected" : ""}" data-tab="income">Income vs Expenses</button>
+      ${hasManual ? `<button class="fin-tab-btn ${state.finTab === "consolidate" ? "selected" : ""}" data-tab="consolidate">Consolidate</button>` : ""}
+    </div>
+    ${tabContent}`;
+
+  $$("#finance-view .fin-tab-btn").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.tab === state.finTab) return;
+    state.finTab = b.dataset.tab;
+    renderFinance();
+  }));
+
+  if (state.finTab !== "overview") return;
   $("#fin-search").addEventListener("input", (e) => {
     state.finSearch = e.target.value;
     renderFinance();
@@ -1218,8 +1363,6 @@ function renderFinance() {
   });
   $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
-  const consolidateBtn = $("#fin-consolidate-btn");
-  if (consolidateBtn) consolidateBtn.addEventListener("click", () => { state.finShowConsolidate = !state.finShowConsolidate; renderFinance(); });
 }
 
 // ---------- boot ----------

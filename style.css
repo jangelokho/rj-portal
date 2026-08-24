@@ -597,9 +597,28 @@ body.mode-finance .finance-view { display: block; }
 
 .fin-empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
 
-.fin-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.fin-head-row .btn-ghost { flex-shrink: 0; white-space: nowrap; }
+.fin-tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+.fin-tab-btn { background: transparent; color: var(--muted); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 4px; margin-bottom: -1px; font-size: 13px; }
+.fin-tab-btn + .fin-tab-btn { margin-left: 12px; }
+.fin-tab-btn:hover { background: transparent; color: var(--text); }
+.fin-tab-btn.selected { color: var(--text); border-bottom-color: var(--list-accent); font-weight: 500; }
+
+.fin-insights p { margin: 0 0 10px; font-size: 13px; line-height: 1.55; }
+.fin-insights p:last-child { margin-bottom: 0; }
+.fin-insight-list { margin: 0 0 10px; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
 .fin-consolidate-note { font-size: 12px; color: var(--muted); margin: -4px 0 16px; max-width: 640px; }
+
+.fin-ie-chart { display: flex; align-items: flex-end; gap: 16px; height: 170px; padding-top: 22px; margin-top: 4px; }
+.fin-ie-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; min-width: 0; cursor: default; }
+.fin-ie-bars { flex: 1; display: flex; align-items: flex-end; gap: 3px; width: 100%; max-width: 56px; }
+.fin-ie-bar { flex: 1; border-radius: 4px 4px 2px 2px; min-height: 3px; transition: opacity .1s ease; }
+.fin-ie-col:hover .fin-ie-bar { opacity: .85; }
+.fin-ie-income { background: var(--ok); }
+.fin-ie-expense { background: var(--danger); }
+.fin-ie-net { font-size: 11px; font-weight: 500; margin-top: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin-ie-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.fin-ie-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+.fin-ie-legend span { display: inline-flex; align-items: center; }
 .fin-sub-h { font-size: 13px; font-weight: 500; margin: 18px 0 8px; }
 .fin-cc-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .fin-cc-list li { padding: 8px 10px; background: var(--bg-card-alt); border-radius: 4px; }

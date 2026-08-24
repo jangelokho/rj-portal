@@ -158,7 +158,7 @@ const BANK_TXNS = [
   ["2026-04-23", "PayLah! top-up", "Food", 17.80],
   ["2026-04-23", "PayLah! top-up", "Food", 4.20],
   ["2026-04-24", "PayLah! top-up", "Food", 24.00],
-  ["2026-04-25", "PayNow – MariBank Singapore", "Other", 100.00],
+  ["2026-04-25", "368 Thomson electricity & water", "Rent", 100.00],
   ["2026-04-25", "PayLah! top-up", "Food", 81.25],
   ["2026-04-25", "PayLah! top-up", "Food", 13.89],
   ["2026-04-25", "PayLah! top-up", "Food", 35.70],
@@ -214,7 +214,7 @@ const BANK_TXNS = [
   ["2026-05-12", "Bus/MRT", "Transportation", 3.43],
   ["2026-05-12", "Grab ride", "Transportation", 20.70],
   ["2026-05-13", "PayLah! top-up", "Food", 6.00],
-  ["2026-05-13", "PayNow – StephanieZheng", "Other", 2463.56],
+  ["2026-05-13", "PayNow – rent + electricity, May (via StephanieZheng)", "Rent", 2463.56],
   ["2026-05-13", "Bus/MRT", "Transportation", 1.49],
   ["2026-05-13", "Bus/MRT", "Transportation", 3.43],
   ["2026-05-13", "Chef Wai T2 Singapore", "Food", 12.30],
@@ -297,7 +297,7 @@ const BANK_TXNS = [
   ["2026-06-12", "FR RFC – Kinzo Singapore", "Food", 14.30],
   ["2026-06-13", "PayNow – Razer Merchant Services", "Other", 14.40],
   ["2026-06-14", "PayNow transfer (personal)", "Other", 17.00],
-  ["2026-06-14", "I-Bank transfer", "Other", 100.00],
+  ["2026-06-14", "368 Thomson electricity & water", "Rent", 100.00],
   ["2026-06-14", "PayNow – rent (recurring)", "Rent", 2400.00],
   ["2026-06-15", "Yong Seng Heng Centre Kitchen", "Food", 10.00],
   ["2026-06-15", "Bus/MRT", "Transportation", 3.08],
@@ -403,3 +403,16 @@ const BANK_TXNS = [
   .filter((row) => row[1].indexOf("excluded") === -1);
 
 window.FINANCE_TXNS = [...CARD_TXNS, ...BANK_TXNS];
+
+// Income — the salary credits excluded above, brought back for the Income vs Expenses
+// tab. Bucketed by the calendar month the money actually landed in the DBS account
+// (not the month it was earned — HitPay pays in arrears, e.g. the Aug 3 credit is for
+// July's work) since that's what actually matters for a cash-flow picture. Ria's pay
+// is a flat S$9,500/month except a partial first month.
+window.INCOME_TXNS = [
+  ["2026-04-20", "HitPay salary — partial, 25–31 Mar (start of employment)", 2159.09],
+  ["2026-05-04", "HitPay salary — April 2026", 9500.00],
+  ["2026-06-02", "HitPay salary — May 2026", 9500.00],
+  ["2026-07-01", "HitPay salary — June 2026", 9500.00],
+  ["2026-08-03", "HitPay salary — July 2026", 9500.00],
+];
