@@ -59,6 +59,11 @@ node dev-server.mjs   # http://localhost:3000  — runs the real api/*.js handle
 Reads `.env.local` (gitignored) for `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `PORTAL_PASSWORD`.
 The dev server shims Vercel's req/res so the same handler files run locally and in production.
 
+## Finances
+A second top-level mode (household expense tracker for Ria + Jangelo) lives
+alongside the Kanban — see **[FINANCES.md](FINANCES.md)** for its architecture,
+data sources, and the conventions/gotchas around it before making changes.
+
 ## Notes
 - Standard lists (`is_standard = true`) hide the delete control and are rejected server-side.
 - `enriched` JSONB drives the kind-aware detail modal (restaurant / place / watch / buyable /
