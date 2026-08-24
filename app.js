@@ -1265,6 +1265,8 @@ const CC_BILL_PAYMENTS = [
 // payments above) rather than disappearing entirely.
 const EXCLUDED_TRANSFERS = [
   { date: "2026-08-05", desc: "Wise Asia-Pacific — transfer to Jangelo (allowance-style, not a household expense)", amount: 1000.00 },
+  { date: "2026-04-15", desc: "Jangelo — PHP → SGD conversion (₱141,716.38 → S$3,000.00)", amount: 3000.00 },
+  { date: "2026-06-04", desc: "Jangelo — PHP → SGD conversion (₱80,000.00 → S$1,662.03)", amount: 1662.03 },
 ];
 
 // Days Ria logged ONE lump manual entry instead of each individual purchase — a
