@@ -1287,12 +1287,12 @@ function finSharesToken(a, b) {
 // "M1 Mobile Subscription - Iestin" and "... - Jang" are two different people's own
 // subscriptions, not the same bill logged twice — never treat those as duplicates
 // of each other regardless of how much text they share.
-// A manual entry Jangelo paid for can never be the same purchase as something on
-// Ria's own Citibank/DBS statements — different account entirely. Without this,
-// "jixiong lunch, Paid by Jangelo" and "Yong Seng Heng Centre Kitchen" (Ria's own
-// card, same recurring stall) can share an exact amount/date by pure coincidence
-// and get treated as a confirmed match.
-function finIsJangeloPaid(m) { return /jangelo/i.test(m.status); }
+// Not used as a match filter — per Ria, the "Paid by"/who-logged-it status isn't a
+// reliable boundary (either of them logs either of their own purchases, and either
+// of them might cover a shared expense on their own card/account) — so a manual
+// entry's status never excludes it as a candidate for either statement. Amount +
+// date + word-overlap do the real filtering; the review tiers exist to catch what
+// that gets wrong.
 
 function finDifferentPerson(a, b) {
   // Ria refers to herself as both "Iestin" and "Ria" in her own item text (e.g.
@@ -1363,7 +1363,7 @@ function finReconcile() {
   // favor of the next-nearest candidate rather than forced back together.
   function tryMatch(maxDays) {
     for (const m of manual) {
-      if (usedManual.has(m.idx) || finIsJangeloPaid(m)) continue;
+      if (usedManual.has(m.idx)) continue;
       const candidates = [];
       for (let i = 0; i < statementRows.length; i++) {
         if (usedStatement.has(i)) continue;
@@ -1409,7 +1409,7 @@ function finReconcile() {
     if (usedStatement.has(s.idx)) continue;
     let best = null, bestDist = Infinity;
     for (const m of manual) {
-      if (usedManual.has(m.idx) || finIsJangeloPaid(m)) continue;
+      if (usedManual.has(m.idx)) continue;
       if (Math.abs(m.cost - s.sgd) > 0.01) continue;
       const dd = finDaysApart(m.date, s.date);
       if (dd > 14) continue;
@@ -1438,7 +1438,7 @@ function finReconcile() {
     if (usedStatement.has(s.idx)) continue;
     let best = null, bestScore = Infinity;
     for (const m of manual) {
-      if (usedManual.has(m.idx) || nearAmountUsedManual.has(m.idx) || finIsJangeloPaid(m)) continue;
+      if (usedManual.has(m.idx) || nearAmountUsedManual.has(m.idx)) continue;
       const dd = finDaysApart(m.date, s.date);
       if (dd > 1) continue;
       const delta = Math.abs(m.cost - s.sgd);
@@ -1524,7 +1524,9 @@ function finJangeloRows() {
 }
 function finReconcileJangelo() {
   const statementRows = finJangeloRows();
-  const manual = finManualRows().filter((m) => /jangelo/i.test(m.status));
+  // Not filtered by "Paid by" status — per Ria, either of them logs either of their
+  // own purchases, so the status field isn't a reliable boundary for matching.
+  const manual = finManualRows();
   const usedStatement = new Set();
   const usedManual = new Set();
   const matched = [];
