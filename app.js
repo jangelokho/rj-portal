@@ -919,6 +919,20 @@ function finRows() {
     return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "ria" };
   });
 }
+// A handful of real expenses that only ever existed in the manual log — paid
+// before either statement's coverage window starts, so no bank/Wise line will
+// ever represent them. Ria confirmed these are genuine (e.g. the Mar 30 rent
+// deposit, refundable at the end of the lease but a real cash-out expense while
+// it's held) and wants them counted in Overview like any other real spend.
+// Given a household-row shape + tagged source: "manual" so it's clear in the
+// table that this one didn't come from a bank statement. Paired to its manual
+// log row via CONFIRMED_PAIRS below so it isn't ALSO shown as "only in the log".
+const MANUAL_LOG_INCLUSIONS = [
+  { date: "2026-03-30", item: "Rent Deposit – 368 Thomson", category: "Rent", sgd: 2400.0 },
+];
+function finManualInclusionRows() {
+  return MANUAL_LOG_INCLUSIONS.map((r, idx) => ({ ...r, idx, source: "manual" }));
+}
 // Ria's + Jangelo's statements merged into one pool — the "most true expenses in
 // SG" picture, per Ria, since it's what actually left an account rather than what
 // made it into the manual log (which stays untouched — this only merges the two
@@ -928,12 +942,14 @@ function finRows() {
 // rows keep the same value they already had, since she's placed first) so every
 // existing idx-keyed lookup — matching, enrichment, confirm/dismiss keys — stays
 // collision-free without needing source-aware key changes. sourceIdx keeps each
-// row's original per-source position, for the few things still scoped to Ria only
-// (the Edit button, category/item overrides).
+// row's original per-source position, for the few things still scoped to Ria/
+// Jangelo only (the Edit button, category/item overrides) — the small set of
+// manual-log inclusions aren't editable this way, they're a fixed confirmed list.
 function finHouseholdRows() {
   const combined = [
     ...finRows().map((r) => ({ ...r, sourceIdx: r.idx })),
     ...finJangeloRows().map((r) => ({ ...r, source: "jangelo", sourceIdx: r.idx })),
+    ...finManualInclusionRows().map((r) => ({ ...r, sourceIdx: r.idx })),
   ];
   combined.forEach((r, i) => { r.idx = i; });
   return combined;
@@ -1097,7 +1113,7 @@ function finTransactionTable(rows, enrichMap) {
             <td>${esc(displayItem)}${finSourceTag(r)}${r.edited ? ` <span class="fin-edited-tag">(edited <button class="fin-reset-override" data-idx="${r.sourceIdx}" data-source="${r.source}">reset</button>)</span>` : ""}</td>
             <td><span class="fin-cat-name"><span class="fin-cat-swatch" style="background:var(${FIN_CATEGORY_COLOR[r.category] || "--fin-c-other"})"></span>${esc(r.category)}</span></td>
             <td class="fin-num">${esc(finFmtSGD(r.sgd))}</td>
-            <td><button class="fin-edit-btn" data-idx="${r.sourceIdx}" data-source="${r.source}">Edit</button></td>
+            <td>${r.source === "manual" ? "" : `<button class="fin-edit-btn" data-idx="${r.sourceIdx}" data-source="${r.source}">Edit</button>`}</td>
           </tr>`;
         }).join("")}</tbody>
       </table>
@@ -1303,6 +1319,9 @@ const CONFIRMED_PAIRS = [
     manualDate: "2026-04-23", manualItem: "368 thomson rent - april 2026",
   },
 ];
+// Note: the Mar 30 rent deposit (see MANUAL_LOG_INCLUSIONS above) doesn't need an
+// entry here — same date + same exact amount means the plain strict matcher
+// (tryMatch(0)) already pairs it with its manual log row on its own.
 
 function finDaysApart(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
 function finManualRows() {
@@ -1588,7 +1607,10 @@ function finJangeloRows() {
 }
 // Small muted tag so a statement row's source is visible once merged — hidden by
 // default (Ria found it cluttered) behind the "Show who paid" toggle.
-function finSourceTag(r) { return r.source === "jangelo" && state.finShowSource ? ` <span class="fin-edited-tag">· Jangelo</span>` : ""; }
+function finSourceTag(r) {
+  if (r.source === "manual" && state.finShowSource) return ` <span class="fin-edited-tag">· from your log, not a statement</span>`;
+  return r.source === "jangelo" && state.finShowSource ? ` <span class="fin-edited-tag">· Jangelo</span>` : "";
+}
 function finConsolidatePanel(reconcile) {
   const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups } = reconcile;
   const byJangelo = manualOnly.filter((m) => /jangelo/i.test(m.status)).length;
