@@ -1286,6 +1286,13 @@ function finSharesToken(a, b) {
 // "M1 Mobile Subscription - Iestin" and "... - Jang" are two different people's own
 // subscriptions, not the same bill logged twice — never treat those as duplicates
 // of each other regardless of how much text they share.
+// A manual entry Jangelo paid for can never be the same purchase as something on
+// Ria's own Citibank/DBS statements — different account entirely. Without this,
+// "jixiong lunch, Paid by Jangelo" and "Yong Seng Heng Centre Kitchen" (Ria's own
+// card, same recurring stall) can share an exact amount/date by pure coincidence
+// and get treated as a confirmed match.
+function finIsJangeloPaid(m) { return /jangelo/i.test(m.status); }
+
 function finDifferentPerson(a, b) {
   // Ria refers to herself as both "Iestin" and "Ria" in her own item text (e.g.
   // "Night Safari Grab Jang" next to "Night Safari Grab Ria" — two separate rides,
@@ -1355,7 +1362,7 @@ function finReconcile() {
   // favor of the next-nearest candidate rather than forced back together.
   function tryMatch(maxDays) {
     for (const m of manual) {
-      if (usedManual.has(m.idx)) continue;
+      if (usedManual.has(m.idx) || finIsJangeloPaid(m)) continue;
       const candidates = [];
       for (let i = 0; i < statementRows.length; i++) {
         if (usedStatement.has(i)) continue;
@@ -1401,7 +1408,7 @@ function finReconcile() {
     if (usedStatement.has(s.idx)) continue;
     let best = null, bestDist = Infinity;
     for (const m of manual) {
-      if (usedManual.has(m.idx)) continue;
+      if (usedManual.has(m.idx) || finIsJangeloPaid(m)) continue;
       if (Math.abs(m.cost - s.sgd) > 0.01) continue;
       const dd = finDaysApart(m.date, s.date);
       if (dd > 14) continue;
@@ -1430,7 +1437,7 @@ function finReconcile() {
     if (usedStatement.has(s.idx)) continue;
     let best = null, bestScore = Infinity;
     for (const m of manual) {
-      if (usedManual.has(m.idx) || nearAmountUsedManual.has(m.idx)) continue;
+      if (usedManual.has(m.idx) || nearAmountUsedManual.has(m.idx) || finIsJangeloPaid(m)) continue;
       const dd = finDaysApart(m.date, s.date);
       if (dd > 1) continue;
       const delta = Math.abs(m.cost - s.sgd);
