@@ -1377,6 +1377,10 @@ const CONFIRMED_PAIRS = [
     statementDate: "2026-04-15", statementItem: "Zheng Yan", statementSgd: 2400.0,
     manualDate: "2026-04-23", manualItem: "368 thomson rent - april 2026",
   },
+  {
+    statementDate: "2026-08-14", statementItem: "PayNow – rent (recurring)", statementSgd: 2400.0,
+    manualDate: "2026-08-02", manualItem: "368 thomson rent - august 2026",
+  },
 ];
 // Note: the Mar 30 rent deposit (see MANUAL_LOG_INCLUSIONS above) doesn't need an
 // entry here — same date + same exact amount means the plain strict matcher
