@@ -1123,13 +1123,21 @@ function finRegularsTable(regulars) {
     </table>`;
 }
 
-function finFilteredRows() {
+// enrichMap is optional (Consolidate needs manual log data to exist at all) — when
+// present, search also matches the enriched display text (e.g. "Grab To Gerrys"),
+// not just the raw generic statement text ("PayNow transfer (personal)") it's
+// standing in for. Without this, a search for exactly what the table shows you
+// could still turn up nothing.
+function finFilteredRows(enrichMap) {
   const q = state.finSearch.trim().toLowerCase();
   const all = finHouseholdRows();
   return all.filter((r) => {
     if (state.finCategory !== "all" && r.category !== state.finCategory) return false;
     if (state.finMonth !== "all" && r.date.slice(0, 7) !== state.finMonth) return false;
-    if (q && !r.item.toLowerCase().includes(q)) return false;
+    if (q) {
+      const displayItem = (enrichMap && enrichMap.get(r.idx)) || r.item;
+      if (!r.item.toLowerCase().includes(q) && !displayItem.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 }
@@ -1920,14 +1928,14 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
 function renderFinance() {
   const all = finHouseholdRows();
   const agg = finAggregate(all);
-  const filtered = finFilteredRows();
-  const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
   const months = Object.keys(agg.byMonth).sort();
   const rangeLabel = agg.minDate && agg.maxDate ? `${finFmtDate(agg.minDate)} – ${finFmtDate(agg.maxDate)}` : "";
 
   const hasManual = !!window.MANUAL_TXNS;
   if (state.finTab === "consolidate" && !hasManual) state.finTab = "overview";
   const reconcile = hasManual ? finReconcile() : null;
+  const filtered = finFilteredRows(reconcile && reconcile.enrichMap);
+  const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
   const tabContent = state.finTab === "income" ? finIncomeExpenseTab()
     : state.finTab === "consolidate" ? finConsolidatePanel(reconcile)
     : finOverviewTab(all, agg, filtered, filteredTotal, months, reconcile && reconcile.enrichMap);
@@ -1995,7 +2003,14 @@ function renderFinance() {
     const tr = btn.closest("tr");
     const row = (source === "jangelo" ? finJangeloRows() : finRows()).find((r) => r.idx === idx);
     if (!row || !tr) return;
-    const { itemCell, categoryCell, actionsCell } = finEditRowForm(row);
+    // Prefill with whatever the table actually shows — for an enriched row (a
+    // generic statement line standing in for a real manual-log item, e.g. "PayNow
+    // transfer (personal)" displayed as "Dry Fish Soup"), editing should start
+    // from the displayed name, not silently revert to the raw underlying text.
+    const enrichMap = reconcile && reconcile.enrichMap;
+    const householdMatch = enrichMap && finHouseholdRows().find((r) => r.source === source && r.sourceIdx === idx);
+    const displayItem = (householdMatch && enrichMap.get(householdMatch.idx)) || row.item;
+    const { itemCell, categoryCell, actionsCell } = finEditRowForm({ ...row, item: displayItem });
     const cells = tr.children;
     cells[1].innerHTML = itemCell;
     cells[2].innerHTML = categoryCell;
@@ -2003,7 +2018,7 @@ function renderFinance() {
     tr.querySelector(".fin-edit-save").addEventListener("click", () => {
       const newItem = tr.querySelector(".fin-edit-item").value.trim();
       const newCategory = tr.querySelector(".fin-edit-category").value;
-      finSetOverride(source, idx, { item: newItem || row.item, category: newCategory });
+      finSetOverride(source, idx, { item: newItem || displayItem, category: newCategory });
       renderFinance();
     });
     tr.querySelector(".fin-edit-cancel").addEventListener("click", () => renderFinance());
