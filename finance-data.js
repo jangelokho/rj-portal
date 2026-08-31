@@ -406,6 +406,10 @@ const BANK_TXNS = [
   .filter((row) => row[1].indexOf("excluded") === -1);
 
 window.FINANCE_TXNS = [...CARD_TXNS, ...BANK_TXNS];
+// CARD_TXNS (Citibank) always comes first in the merge above, so this boundary
+// index is all app.js needs to tell which account a given FINANCE_TXNS row came
+// from — no need to tag every single row.
+window.FINANCE_CARD_COUNT = CARD_TXNS.length;
 
 // Income — the salary credits excluded above, brought back for the Income vs Expenses
 // tab. Bucketed by the calendar month the money actually landed in the DBS account

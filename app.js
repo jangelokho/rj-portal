@@ -875,7 +875,8 @@ state.finSearch = "";
 state.finCategory = "all";
 state.finMonth = "all";
 state.finSort = "date-desc"; // 'date-desc' | 'date-asc' | 'cost-desc' | 'cost-asc' | 'item-asc'
-state.finShowSource = false; // whether the "· Jangelo" tag is shown on his rows
+state.finShowSource = false; // whether the "· Jangelo"/"· Ria" tag is shown
+state.finShowStatement = false; // whether the "· Citibank"/"· DBS"/"· Wise" tag is shown
 
 const FIN_CATEGORY_ORDER = [
   "Food", "Groceries/Supplies", "Transportation", "Shopping",
@@ -915,9 +916,11 @@ $$("#mode-switch .mode-btn").forEach((b) => {
 // — e.g. a "PayLah! top-up" she knows wasn't actually food — without editing the
 // source file. Merged in here so every reader of finRows() sees the correction.
 function finRows() {
+  const cardCount = window.FINANCE_CARD_COUNT || 0;
   return (window.FINANCE_TXNS || []).map(([date, item, category, sgd], idx) => {
     const ov = (state.finOverrides || {})[`ria:${idx}`];
-    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "ria" };
+    const account = idx < cardCount ? "Citibank" : "DBS";
+    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "ria", account };
   });
 }
 // A handful of real expenses that only ever existed in the manual log — paid
@@ -1682,17 +1685,24 @@ function finReconcile() {
 function finJangeloRows() {
   return (window.JANGELO_TXNS || []).map(([date, item, category, sgd], idx) => {
     const ov = (state.finOverrides || {})[`jangelo:${idx}`];
-    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "jangelo" };
+    return { date, item: (ov && ov.item) || item, category: (ov && ov.category) || category, sgd, idx, edited: !!ov, source: "jangelo", account: "Wise" };
   });
 }
-// Small muted tag so a statement row's source is visible once merged — hidden by
-// default (Ria found it cluttered) behind the "Show who paid" toggle.
+// Small muted tag so a statement row's source/account is visible once merged —
+// hidden by default (Ria found it cluttered) behind two independent toggles:
+// "Show who paid" (Ria/Jangelo/manual-log) and "Show statement" (Citibank/DBS/
+// Wise). Either, both, or neither can be on; parts join into one tag.
 function finSourceTag(r) {
-  if (!state.finShowSource) return "";
-  if (r.source === "manual") return ` <span class="fin-edited-tag">· from your log, not a statement</span>`;
-  if (r.source === "jangelo") return ` <span class="fin-edited-tag">· Jangelo</span>`;
-  if (r.source === "ria") return ` <span class="fin-edited-tag">· Ria</span>`;
-  return "";
+  const parts = [];
+  if (state.finShowSource) {
+    if (r.source === "manual") parts.push("from your log, not a statement");
+    else if (r.source === "jangelo") parts.push("Jangelo");
+    else if (r.source === "ria") parts.push("Ria");
+  }
+  if (state.finShowStatement && r.source !== "manual" && r.account) {
+    parts.push(r.account);
+  }
+  return parts.length ? ` <span class="fin-edited-tag">· ${parts.join(" · ")}</span>` : "";
 }
 function finConsolidatePanel(reconcile) {
   const { matched, manualOnly, statementOnly, ccBillPayments, excludedTransfers, possibleMatches, possibleMatchesNearAmount, possibleDuplicates, confirmedDuplicates, consolidatedGroups } = reconcile;
@@ -1905,6 +1915,7 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
             <option value="item-asc" ${state.finSort === "item-asc" ? "selected" : ""}>Item: A to Z</option>
           </select>
           <label class="fin-toggle"><input type="checkbox" id="fin-show-source" ${state.finShowSource ? "checked" : ""} /> Show who paid</label>
+          <label class="fin-toggle"><input type="checkbox" id="fin-show-statement" ${state.finShowStatement ? "checked" : ""} /> Show statement</label>
         </div>
         ${finTransactionTable(filtered, enrichMap)}
       </div>
@@ -1990,6 +2001,7 @@ function renderFinance() {
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
   $("#fin-sort-filter").addEventListener("change", (e) => { state.finSort = e.target.value; renderFinance(); });
   $("#fin-show-source").addEventListener("change", (e) => { state.finShowSource = e.target.checked; renderFinance(); });
+  $("#fin-show-statement").addEventListener("change", (e) => { state.finShowStatement = e.target.checked; renderFinance(); });
   const insightsToggle = $("#fin-insights-toggle");
   if (insightsToggle) insightsToggle.addEventListener("click", () => { state.finShowInsights = !state.finShowInsights; renderFinance(); });
   // Clicking the already-selected month clears the filter back to "All months".
