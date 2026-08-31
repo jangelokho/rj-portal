@@ -1910,15 +1910,15 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
       </div>
       <div class="fin-side">
         <div class="fin-card">
-          <h3>${categoryHeading}</h3>
-          ${finCategoryChart(categoryAgg.byCategory, categoryAgg.total)}
-          ${finCategorySummaryTable(categoryAgg.byCategory, categoryAgg.total)}
-        </div>
-        <div class="fin-card">
           <h3>Monthly breakdown</h3>
           <p class="fin-consolidate-note">Click a month to filter the table and category breakdown to it.</p>
           ${finMonthlyChart(agg.byMonth, state.finMonth)}
           ${finMonthlySummaryTable(agg.byMonth, agg.total, state.finMonth)}
+        </div>
+        <div class="fin-card">
+          <h3>${categoryHeading}</h3>
+          ${finCategoryChart(categoryAgg.byCategory, categoryAgg.total)}
+          ${finCategorySummaryTable(categoryAgg.byCategory, categoryAgg.total)}
         </div>
         <div class="fin-card">
           <h3>Your regulars 💕</h3>
