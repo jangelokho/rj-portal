@@ -1202,7 +1202,10 @@ const DISCRETIONARY_CATEGORIES = ["Shopping", "Entertainment", "Medicine/Health"
 // category, but split out here so one big transfer doesn't read as a spending spike.
 function finIsTransferLike(row) {
   if (row.category !== "Other") return false;
-  if (/wise|atm withdrawal|i-bank transfer|maribank/i.test(row.item)) return true;
+  // NOT "maribank" — a MariBank charge is a real purchase paid through that
+  // e-wallet (e.g. a Shopee checkout), not money moving between accounts, so it
+  // must count as real spend here same as anywhere else, per Ria.
+  if (/wise|atm withdrawal|i-bank transfer/i.test(row.item)) return true;
   return row.sgd >= 200;
 }
 function finBucket(row) {
