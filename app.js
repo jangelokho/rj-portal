@@ -874,6 +874,7 @@ state.mode = localStorage.getItem(MODE_KEY) === "finance" ? "finance" : "list";
 state.finSearch = "";
 state.finCategory = "all";
 state.finMonth = "all";
+state.finAccount = "all"; // 'all' | 'Citibank' | 'DBS' | 'Wise'
 state.finSort = "date-desc"; // 'date-desc' | 'date-asc' | 'cost-desc' | 'cost-asc' | 'item-asc'
 state.finShowSource = false; // whether the "· Jangelo"/"· Ria" tag is shown
 state.finShowStatement = false; // whether the "· Citibank"/"· DBS"/"· Wise" tag is shown
@@ -1137,6 +1138,7 @@ function finFilteredRows(enrichMap) {
   return all.filter((r) => {
     if (state.finCategory !== "all" && r.category !== state.finCategory) return false;
     if (state.finMonth !== "all" && r.date.slice(0, 7) !== state.finMonth) return false;
+    if (state.finAccount !== "all" && r.account !== state.finAccount) return false;
     if (q) {
       const displayItem = (enrichMap && enrichMap.get(r.idx)) || r.item;
       if (!r.item.toLowerCase().includes(q) && !displayItem.toLowerCase().includes(q)) return false;
@@ -1907,6 +1909,12 @@ function finOverviewTab(all, agg, filtered, filteredTotal, months, enrichMap) {
             <option value="all">All months</option>
             ${monthOptions}
           </select>
+          <select id="fin-account-filter">
+            <option value="all">All statements</option>
+            <option value="Citibank" ${state.finAccount === "Citibank" ? "selected" : ""}>Citibank</option>
+            <option value="DBS" ${state.finAccount === "DBS" ? "selected" : ""}>DBS</option>
+            <option value="Wise" ${state.finAccount === "Wise" ? "selected" : ""}>Wise</option>
+          </select>
           <select id="fin-sort-filter">
             <option value="date-desc" ${state.finSort === "date-desc" ? "selected" : ""}>Newest first</option>
             <option value="date-asc" ${state.finSort === "date-asc" ? "selected" : ""}>Oldest first</option>
@@ -1999,6 +2007,7 @@ function renderFinance() {
   });
   $("#fin-category-filter").addEventListener("change", (e) => { state.finCategory = e.target.value; renderFinance(); });
   $("#fin-month-filter").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinance(); });
+  $("#fin-account-filter").addEventListener("change", (e) => { state.finAccount = e.target.value; renderFinance(); });
   $("#fin-sort-filter").addEventListener("change", (e) => { state.finSort = e.target.value; renderFinance(); });
   $("#fin-show-source").addEventListener("change", (e) => { state.finShowSource = e.target.checked; renderFinance(); });
   $("#fin-show-statement").addEventListener("change", (e) => { state.finShowStatement = e.target.checked; renderFinance(); });
