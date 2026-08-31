@@ -1343,8 +1343,14 @@ state.finShowInsights = true;
 // it's the same real transaction — "everything should be there" per Ria, just
 // not folded into either side's main total.
 const STATEMENT_CAVEATS = [
-  { account: "DBS", direction: "debit", date: "2026-07-07", desc: "Citibank card payment — settles the Jun statement", amount: 80.00 },
-  { account: "DBS", direction: "debit", date: "2026-08-07", desc: "Citibank card payment — settles the Jul statement", amount: 780.00 },
+  { account: "DBS", direction: "debit", date: "2026-07-08", desc: "Citibank card payment — settles the Jun statement", amount: 80.00 },
+  { account: "DBS", direction: "debit", date: "2026-08-11", desc: "Citibank card payment — settles the Jul statement", amount: 780.00 },
+  // The Citibank-side mirror of the two DBS payments above — confirmed straight
+  // off the actual Citibank statements ("MONEYSEND CORRAL RIA IEST...", exact
+  // amounts, no rounding). Excluded from Citibank's own Credit total since it'd
+  // double-count against the itemized purchases the payment settles.
+  { account: "Citibank", direction: "credit", date: "2026-07-08", desc: "MONEYSEND CORRAL RIA IEST (payment received, settles Jun balance)", amount: 80.00 },
+  { account: "Citibank", direction: "credit", date: "2026-08-11", desc: "MONEYSEND CORRAL RIA IEST (payment received, settles Jul balance)", amount: 780.00 },
   { account: "DBS", direction: "debit", date: "2026-08-05", desc: "PayNow – Wise Asia-Pacific (transfer to Jangelo, allowance-style)", amount: 1000.00 },
   { account: "Wise", direction: "credit", date: "2026-08-05", desc: "Received money from Ria (the DBS transfer above)", amount: 1000.00 },
   { account: "Wise", direction: "credit", date: "2026-04-15", desc: "PHP → SGD conversion (₱141,716.38 → S$3,000.00)", amount: 3000.00 },
@@ -1422,8 +1428,8 @@ function finStatementsTab() {
 // purchases) but surfaced here since Ria asked whether she'd separately logged the
 // payment itself.
 const CC_BILL_PAYMENTS = [
-  { date: "2026-07-07", desc: "Citibank card payment — settles the Jun statement ($79.50 balance)", amount: 80.00 },
-  { date: "2026-08-07", desc: "Citibank card payment — settles the Jul statement ($779.54 balance)", amount: 780.00 },
+  { date: "2026-07-08", desc: "Citibank card payment — settles the Jun statement ($79.50 balance)", amount: 80.00 },
+  { date: "2026-08-11", desc: "Citibank card payment — settles the Jul statement ($779.54 balance)", amount: 780.00 },
 ];
 
 // Real money out of the DBS account, deliberately left out of FINANCE_TXNS because
