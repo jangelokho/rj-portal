@@ -20,7 +20,7 @@ All three transaction arrays share the tuple shape `[date, item, category, sgd]`
 filter reconciliation matches; either person can log or pay for either person's
 purchases, so status isn't a reliable match boundary).
 
-## The three tabs, and what each one is allowed to use
+## The four tabs, and what each one is allowed to use
 
 - **Overview** — `finHouseholdRows()` = Ria's statement + Jangelo's statement,
   merged. This is "the most true expenses in SG" per Ria — it must **only** ever
@@ -32,6 +32,15 @@ purchases, so status isn't a reliable match boundary).
   subtract money that never touched her DBS account, making "Net" not correspond
   to her actual bank balance. (This was tried and reverted once already — see git
   history around 2026-08-25 for the reasoning if it comes up again.)
+- **Statements** (`finStatementsTab()`) — per-account (Citibank/DBS/Wise) Debit/
+  Credit/Net, straight from the raw data (not the curated "household expense"
+  view). Debit/Credit here deliberately still exclude the same things Overview
+  excludes (CC bill payments, the Ria→Jangelo Wise transfer, PHP→SGD conversions)
+  — those are real money movements but would double-count or aren't a household
+  expense, so they're surfaced separately via `STATEMENT_CAVEATS` (a small fixed
+  list with an explicit `account`/`direction`) rather than folded into Debit/
+  Credit or silently dropped. "Net" is a captured-movement figure, not a real
+  account balance — there's no opening-balance data to reconcile against.
 - **Consolidate** — reconciles the combined statements (`finHouseholdRows()`)
   against the manual log (`finManualRows()`). This is the only tab that reads
   `MANUAL_TXNS`.
@@ -70,6 +79,26 @@ create false positives elsewhere):
 `CC_BILL_PAYMENTS` — a conversion just moves his own money into the account, it's
 not itself a household expense) and listed in `EXCLUDED_TRANSFERS` instead.
 
+## Enrichment consistency (search + edit must agree with what's displayed)
+
+`finReconcile()`'s `enrichMap` substitutes a generic statement description (e.g.
+"PayNow transfer (personal)") with the matched manual-log row's real name (e.g.
+"Grab To Gerrys") for display in `finTransactionTable()`. Two things must stay in
+sync with that substitution, or a row's search/edit behavior silently
+contradicts what's on screen:
+- **Search** (`finFilteredRows()`) takes `enrichMap` as a param and matches
+  against the enriched display text too, not just the raw `r.item` — otherwise
+  searching for exactly what the table shows you can turn up nothing.
+- **Edit prefill** (the `.fin-edit-btn` click handler in `renderFinance()`) looks
+  up the enriched text for the row before building the edit form — otherwise
+  clicking Edit on an enriched row shows the raw generic text, and saving without
+  noticing silently reverts the row's display name back to the generic one.
+
+Both were bugs found in production once already (Ria searching "gerry" found the
+food charge but not the enriched Grab ride; editing "Dry Fish Soup" reset it to
+"PayNow transfer (personal)") — watch for this class of issue whenever you touch
+either function.
+
 ## Editing & overrides
 
 Both Ria's and Jangelo's rows are editable in the Overview table (Edit button →
@@ -88,8 +117,17 @@ that was cluttering it).
 
 - **Sort dropdown** (Overview toolbar): Newest/Oldest first, Cost high↔low, Item
   A→Z.
-- **"Show who paid" toggle**: off by default. When on, tags rows "· Ria" /
-  "· Jangelo" / "· from your log, not a statement" via `finSourceTag()`.
+- **Statement filter dropdown** (Overview toolbar): All statements / Citibank /
+  DBS / Wise — filters the table by `r.account`. Citibank vs DBS is derived from
+  `window.FINANCE_CARD_COUNT` (the `CARD_TXNS.length` boundary exposed by
+  `finance-data.js`, since `CARD_TXNS` always comes first in the `FINANCE_TXNS`
+  concat) rather than tagging every row by hand; Jangelo's rows are always
+  `"Wise"`. The one manual-log inclusion (rent deposit) has no `account`, so it's
+  naturally excluded whenever a specific statement is selected.
+- **"Show who paid" / "Show statement" toggles**: both off by default, independent
+  of each other. When on, `finSourceTag()` composes whichever are enabled into one
+  tag — e.g. "· Ria", "· DBS", or "· Ria · DBS" with both on. Manual-log inclusion
+  rows always show "· from your log, not a statement" regardless of either toggle.
 - **"Your regulars" card** (Overview sidebar): merchants with 3+ visits within
   spend-y categories (Food/Groceries/Shopping/Entertainment/Medicine — NOT
   Rent/Utilities/Transportation/Other, those aren't "places you keep going back
