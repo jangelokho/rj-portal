@@ -113,6 +113,37 @@ The **"(edited)"** label is inline in the table; the **Reset** button only
 appears inside the edit form itself (not as a standalone button in the table —
 that was cluttering it).
 
+## Verified against real statements (2026-08-31)
+
+Every Citibank (Jun/Jul/Aug) and DBS (Apr/May/Jun/Jul) transaction was cross-
+checked line-by-line against the actual statement PDFs — all of `CARD_TXNS` is
+confirmed complete and accurate. That pass caught real bugs worth knowing about
+before assuming the data is fine:
+
+- **A genuine duplicate** (two identical "$12 PayNow transfer (personal)" rows
+  on Jun 6) and **a mislabeled row** ("368 Thomson electricity & water" on Jun
+  14 was actually a MariBank transfer, wrongly guessed as a utility payment)
+  both existed in `BANK_TXNS` despite looking individually plausible — neither
+  would have surfaced without the real statement in hand.
+- **MariBank transfers are real expenses, categorized Shopping**, named
+  "Shopee purchase (via MariBank)" — per Ria: it's a real purchase through that
+  e-wallet, not an inter-account transfer. `finIsTransferLike()` must never
+  treat "maribank" or the raw "I-Bank transfer" statement text as transfer-like
+  again (both were tried and removed once already — every instance turned out
+  to be a real purchase).
+- **Interest earned, expense-report reimbursements, and card cashback** are
+  real DBS credits with confirmed dates/amounts, added to `STATEMENT_CAVEATS`
+  (not folded into DBS's main Credit total — they aren't salary or household-
+  expense-related, same treatment as everything else there).
+- A DBS-side debit date and a Citibank-side credit date for the same inter-bank
+  payment can legitimately differ by a day or more — don't assume both sides of
+  `STATEMENT_CAVEATS` must share one date without checking each side's own
+  statement.
+
+If Ria provides more source statements later (DBS for Aug, Citibank for
+Apr/May), repeat this line-by-line check rather than assuming the existing data
+is already complete — it wasn't, twice.
+
 ## Display niceties
 
 - **Sort dropdown** (Overview toolbar): Newest/Oldest first, Cost high↔low, Item
