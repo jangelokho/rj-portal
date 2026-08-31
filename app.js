@@ -1202,10 +1202,13 @@ const DISCRETIONARY_CATEGORIES = ["Shopping", "Entertainment", "Medicine/Health"
 // category, but split out here so one big transfer doesn't read as a spending spike.
 function finIsTransferLike(row) {
   if (row.category !== "Other") return false;
-  // NOT "maribank" — a MariBank charge is a real purchase paid through that
-  // e-wallet (e.g. a Shopee checkout), not money moving between accounts, so it
-  // must count as real spend here same as anywhere else, per Ria.
-  if (/wise|atm withdrawal|i-bank transfer/i.test(row.item)) return true;
+  // NOT "maribank" and not the generic "i-bank transfer" text either — every
+  // "I-Bank transfer" row turned out to actually be a MariBank Shopee checkout
+  // once cross-checked against the real DBS statements (now renamed/recategorized
+  // as Shopping), so this keyword would only ever miscategorize real spend as a
+  // transfer. A MariBank charge is a real purchase, not money moving between
+  // accounts — it must count as real spend here same as anywhere else, per Ria.
+  if (/wise|atm withdrawal/i.test(row.item)) return true;
   return row.sgd >= 200;
 }
 function finBucket(row) {
@@ -1343,14 +1346,35 @@ state.finShowInsights = true;
 // it's the same real transaction — "everything should be there" per Ria, just
 // not folded into either side's main total.
 const STATEMENT_CAVEATS = [
-  { account: "DBS", direction: "debit", date: "2026-07-08", desc: "Citibank card payment — settles the Jun statement", amount: 80.00 },
-  { account: "DBS", direction: "debit", date: "2026-08-11", desc: "Citibank card payment — settles the Jul statement", amount: 780.00 },
+  // DBS's own debit date, confirmed off the real July DBS statement ("Advice
+  // Bill Payment CCC..."), is Jul 7 — one day before Citibank's own posting of
+  // the same transfer (Jul 8, below). The two sides settling on different dates
+  // is normal for an inter-bank payment; not a data error. The Aug DBS statement
+  // isn't on hand, so that debit's exact date is still an estimate matching
+  // Citibank's Aug 11 posting.
+  { account: "DBS", direction: "debit", date: "2026-07-07", desc: "Citibank card payment — settles the Jun statement", amount: 80.00 },
+  { account: "DBS", direction: "debit", date: "2026-08-11", desc: "Citibank card payment — settles the Jul statement (DBS-side date estimated — no Aug DBS statement on hand)", amount: 780.00 },
   // The Citibank-side mirror of the two DBS payments above — confirmed straight
   // off the actual Citibank statements ("MONEYSEND CORRAL RIA IEST...", exact
   // amounts, no rounding). Excluded from Citibank's own Credit total since it'd
   // double-count against the itemized purchases the payment settles.
   { account: "Citibank", direction: "credit", date: "2026-07-08", desc: "MONEYSEND CORRAL RIA IEST (payment received, settles Jun balance)", amount: 80.00 },
   { account: "Citibank", direction: "credit", date: "2026-08-11", desc: "MONEYSEND CORRAL RIA IEST (payment received, settles Jul balance)", amount: 780.00 },
+  // Interest, expense reimbursements, and cashback — confirmed off the real Apr/
+  // May/Jun/Jul DBS statements. Real credits with no double-counting risk (they
+  // don't correspond to any itemized purchase elsewhere), but kept as caveats
+  // rather than folded into DBS's main Credit total since they aren't salary and
+  // aren't household-expense-related — same treatment as everything else here.
+  { account: "DBS", direction: "credit", date: "2026-04-24", desc: "Expense report reimbursement", amount: 171.77 },
+  { account: "DBS", direction: "credit", date: "2026-05-07", desc: "Interest earned", amount: 1.01 },
+  { account: "DBS", direction: "credit", date: "2026-05-08", desc: "Expense report reimbursement", amount: 57.59 },
+  { account: "DBS", direction: "credit", date: "2026-05-31", desc: "Interest earned", amount: 0.29 },
+  { account: "DBS", direction: "credit", date: "2026-06-07", desc: "Interest earned", amount: 11.40 },
+  { account: "DBS", direction: "credit", date: "2026-06-30", desc: "Interest earned", amount: 0.59 },
+  { account: "DBS", direction: "credit", date: "2026-07-07", desc: "Interest earned", amount: 19.24 },
+  { account: "DBS", direction: "credit", date: "2026-07-21", desc: "Expense report reimbursement", amount: 17.50 },
+  { account: "DBS", direction: "credit", date: "2026-07-31", desc: "Interest earned", amount: 0.87 },
+  { account: "DBS", direction: "credit", date: "2026-07-31", desc: "DBS Visa Debit cashback (June)", amount: 3.72 },
   { account: "DBS", direction: "debit", date: "2026-08-05", desc: "PayNow – Wise Asia-Pacific (transfer to Jangelo, allowance-style)", amount: 1000.00 },
   { account: "Wise", direction: "credit", date: "2026-08-05", desc: "Received money from Ria (the DBS transfer above)", amount: 1000.00 },
   { account: "Wise", direction: "credit", date: "2026-04-15", desc: "PHP → SGD conversion (₱141,716.38 → S$3,000.00)", amount: 3000.00 },
