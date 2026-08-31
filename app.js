@@ -1328,8 +1328,66 @@ function finIncomeExpenseTab() {
 }
 
 // ---------- Consolidate: reconcile the combined statement data against the manual log ----------
-state.finTab = "overview"; // 'overview' | 'income' | 'consolidate'
+state.finTab = "overview"; // 'overview' | 'income' | 'statements' | 'consolidate'
 state.finShowInsights = true;
+
+// Real money movements that would double-count (a bill payment settling
+// purchases already itemized elsewhere) or aren't a household expense at all (an
+// internal transfer between the household's own accounts) — left out of each
+// account's main Debit/Credit totals in the Statements tab, but listed here so
+// they're shown as their own caveat breakdown instead of silently vanishing.
+// The Aug 5 transfer appears on BOTH sides (a DBS debit, a Wise credit) since
+// it's the same real transaction — "everything should be there" per Ria, just
+// not folded into either side's main total.
+const STATEMENT_CAVEATS = [
+  { account: "DBS", direction: "debit", date: "2026-07-07", desc: "Citibank card payment — settles the Jun statement", amount: 80.00 },
+  { account: "DBS", direction: "debit", date: "2026-08-07", desc: "Citibank card payment — settles the Jul statement", amount: 780.00 },
+  { account: "DBS", direction: "debit", date: "2026-08-05", desc: "PayNow – Wise Asia-Pacific (transfer to Jangelo, allowance-style)", amount: 1000.00 },
+  { account: "Wise", direction: "credit", date: "2026-08-05", desc: "Received money from Ria (the DBS transfer above)", amount: 1000.00 },
+  { account: "Wise", direction: "credit", date: "2026-04-15", desc: "PHP → SGD conversion (₱141,716.38 → S$3,000.00)", amount: 3000.00 },
+  { account: "Wise", direction: "credit", date: "2026-06-04", desc: "PHP → SGD conversion (₱80,000.00 → S$1,662.03)", amount: 1662.03 },
+  // Known from Jangelo's statement export notes but never captured as a dated
+  // data row — flagged rather than guessing a date, so it doesn't silently
+  // disappear from "everything should be there".
+  { account: "Wise", direction: "credit", date: null, desc: "Received money from Alyssa Karin Pang (repayment/gift) — date not on record", amount: 100.00 },
+];
+
+function finStatementsTab() {
+  const rows = finRows();
+  const jRows = finJangeloRows();
+  const incomeTotal = finIncomeRows().reduce((s, r) => s + r.sgd, 0);
+  const netColor = (n) => (n >= 0 ? "var(--ok)" : "var(--danger)");
+
+  function summarize(account, accountRows, extraCredit) {
+    const debit = accountRows.filter((r) => r.sgd > 0).reduce((s, r) => s + r.sgd, 0);
+    const refundCredit = accountRows.filter((r) => r.sgd < 0).reduce((s, r) => s - r.sgd, 0);
+    const credit = refundCredit + (extraCredit || 0);
+    return { account, debit, credit, net: credit - debit, caveats: STATEMENT_CAVEATS.filter((c) => c.account === account) };
+  }
+
+  const accounts = [
+    summarize("Citibank", rows.filter((r) => r.account === "Citibank"), 0),
+    summarize("DBS", rows.filter((r) => r.account === "DBS"), incomeTotal),
+    summarize("Wise", jRows, 0),
+  ];
+
+  return `
+    <p class="fin-consolidate-note">Per-account totals straight from the raw statement data. "Net" is the movement captured here (Credit − Debit) — not your real account balance, since no opening balance is tracked.</p>
+    ${accounts.map((a) => `
+      <div class="fin-card" style="margin-bottom:16px;">
+        <h3>${esc(a.account)}</h3>
+        <div class="fin-kpis" style="margin-bottom:${a.caveats.length ? "12px" : "0"};">
+          <div class="fin-kpi"><div class="fin-kpi-label">Debit</div><div class="fin-kpi-value">${esc(finFmtSGD(a.debit))}</div></div>
+          <div class="fin-kpi"><div class="fin-kpi-label">Credit</div><div class="fin-kpi-value">${esc(finFmtSGD(a.credit))}</div></div>
+          <div class="fin-kpi"><div class="fin-kpi-label">Net</div><div class="fin-kpi-value" style="color:${netColor(a.net)}">${a.net >= 0 ? "+" : ""}${esc(finFmtSGD(a.net))}</div></div>
+        </div>
+        ${a.caveats.length ? `
+        <p class="fin-consolidate-note">Not counted above — real money movements that would double-count elsewhere, or aren't a household expense:</p>
+        <ul class="fin-cc-list">
+          ${a.caveats.map((c) => `<li>${c.date ? esc(finFmtDate(c.date)) + " — " : ""}${esc(c.desc)}, ${c.direction === "debit" ? "-" : "+"}${esc(finFmtSGD(c.amount))}</li>`).join("")}
+        </ul>` : ""}
+      </div>`).join("")}`;
+}
 
 // Rounded-up Citibank card payments, found as "BILL CCC" lines in the DBS history —
 // excluded from FINANCE_TXNS itself (they'd double-count the card's own itemized
@@ -1960,6 +2018,7 @@ function renderFinance() {
   const filtered = finFilteredRows(reconcile && reconcile.enrichMap);
   const filteredTotal = filtered.reduce((s, r) => s + r.sgd, 0);
   const tabContent = state.finTab === "income" ? finIncomeExpenseTab()
+    : state.finTab === "statements" ? finStatementsTab()
     : state.finTab === "consolidate" ? finConsolidatePanel(reconcile)
     : finOverviewTab(all, agg, filtered, filteredTotal, months, reconcile && reconcile.enrichMap);
 
@@ -1971,6 +2030,7 @@ function renderFinance() {
     <div class="fin-tabs">
       <button class="fin-tab-btn ${state.finTab === "overview" ? "selected" : ""}" data-tab="overview">Overview</button>
       <button class="fin-tab-btn ${state.finTab === "income" ? "selected" : ""}" data-tab="income">Income vs Expenses</button>
+      <button class="fin-tab-btn ${state.finTab === "statements" ? "selected" : ""}" data-tab="statements">Statements</button>
       ${hasManual ? `<button class="fin-tab-btn ${state.finTab === "consolidate" ? "selected" : ""}" data-tab="consolidate">Consolidate</button>` : ""}
     </div>
     ${tabContent}`;
