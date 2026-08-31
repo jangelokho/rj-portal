@@ -1356,31 +1356,56 @@ function finStatementsTab() {
   const rows = finRows();
   const jRows = finJangeloRows();
   const incomeTotal = finIncomeRows().reduce((s, r) => s + r.sgd, 0);
+  const incomeByMonth = {};
+  for (const r of finIncomeRows()) { const m = r.date.slice(0, 7); incomeByMonth[m] = (incomeByMonth[m] || 0) + r.sgd; }
   const netColor = (n) => (n >= 0 ? "var(--ok)" : "var(--danger)");
 
-  function summarize(account, accountRows, extraCredit) {
+  function summarize(account, accountRows, extraCredit, extraCreditByMonth) {
     const debit = accountRows.filter((r) => r.sgd > 0).reduce((s, r) => s + r.sgd, 0);
     const refundCredit = accountRows.filter((r) => r.sgd < 0).reduce((s, r) => s - r.sgd, 0);
     const credit = refundCredit + (extraCredit || 0);
-    return { account, debit, credit, net: credit - debit, caveats: STATEMENT_CAVEATS.filter((c) => c.account === account) };
+    const byMonth = {};
+    for (const r of accountRows) {
+      const m = r.date.slice(0, 7);
+      const b = (byMonth[m] ||= { debit: 0, credit: 0 });
+      if (r.sgd > 0) b.debit += r.sgd; else b.credit += -r.sgd;
+    }
+    for (const [m, amt] of Object.entries(extraCreditByMonth || {})) {
+      (byMonth[m] ||= { debit: 0, credit: 0 }).credit += amt;
+    }
+    return { account, debit, credit, net: credit - debit, byMonth, caveats: STATEMENT_CAVEATS.filter((c) => c.account === account) };
   }
 
   const accounts = [
-    summarize("Citibank", rows.filter((r) => r.account === "Citibank"), 0),
-    summarize("DBS", rows.filter((r) => r.account === "DBS"), incomeTotal),
-    summarize("Wise", jRows, 0),
+    summarize("Citibank", rows.filter((r) => r.account === "Citibank"), 0, null),
+    summarize("DBS", rows.filter((r) => r.account === "DBS"), incomeTotal, incomeByMonth),
+    summarize("Wise", jRows, 0, null),
   ];
+
+  function monthlyTable(a) {
+    const months = Object.keys(a.byMonth).sort();
+    return `
+      <table class="fin-summary-table">
+        <thead><tr><th>Month</th><th class="fin-num">Debit</th><th class="fin-num">Credit</th><th class="fin-num">Net</th></tr></thead>
+        <tbody>${months.map((m) => {
+          const b = a.byMonth[m], n = b.credit - b.debit;
+          return `<tr><td>${esc(finFmtMonth(m))}</td><td class="fin-num">${esc(finFmtSGD(b.debit))}</td><td class="fin-num">${esc(finFmtSGD(b.credit))}</td><td class="fin-num" style="color:${netColor(n)}">${n >= 0 ? "+" : ""}${esc(finFmtSGD(n))}</td></tr>`;
+        }).join("")}</tbody>
+        <tfoot><tr><td>Total</td><td class="fin-num">${esc(finFmtSGD(a.debit))}</td><td class="fin-num">${esc(finFmtSGD(a.credit))}</td><td class="fin-num" style="color:${netColor(a.net)}">${a.net >= 0 ? "+" : ""}${esc(finFmtSGD(a.net))}</td></tr></tfoot>
+      </table>`;
+  }
 
   return `
     <p class="fin-consolidate-note">Per-account totals straight from the raw statement data. "Net" is the movement captured here (Credit − Debit) — not your real account balance, since no opening balance is tracked.</p>
     ${accounts.map((a) => `
       <div class="fin-card" style="margin-bottom:16px;">
         <h3>${esc(a.account)}</h3>
-        <div class="fin-kpis" style="margin-bottom:${a.caveats.length ? "12px" : "0"};">
+        <div class="fin-kpis" style="margin-bottom:12px;">
           <div class="fin-kpi"><div class="fin-kpi-label">Debit</div><div class="fin-kpi-value">${esc(finFmtSGD(a.debit))}</div></div>
           <div class="fin-kpi"><div class="fin-kpi-label">Credit</div><div class="fin-kpi-value">${esc(finFmtSGD(a.credit))}</div></div>
           <div class="fin-kpi"><div class="fin-kpi-label">Net</div><div class="fin-kpi-value" style="color:${netColor(a.net)}">${a.net >= 0 ? "+" : ""}${esc(finFmtSGD(a.net))}</div></div>
         </div>
+        ${monthlyTable(a)}
         ${a.caveats.length ? `
         <p class="fin-consolidate-note">Not counted above — real money movements that would double-count elsewhere, or aren't a household expense:</p>
         <ul class="fin-cc-list">
